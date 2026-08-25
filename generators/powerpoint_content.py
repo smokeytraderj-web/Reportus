@@ -99,15 +99,36 @@ def _validate_picks(value: object, slide_number: int) -> dict[str, object]:
     return {"rows": rows}
 
 
-def validate_deck_content(source: Path, *, report_title: str, image_paths: tuple[Path, ...] = ()) -> dict[str, object]:
-    if source.suffix.lower() != ".json":
-        raise DeckContentError(
-            "This build accepts a structured .json content package. General document synthesis requires an AI provider."
-        )
-    try:
-        payload = json.loads(source.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise DeckContentError("The PowerPoint content JSON is invalid.") from exc
+def deck_content_schema() -> dict[str, object]:
+    """Return the provider-facing low-density bullet-deck schema."""
+
+    return {
+        "type": "object",
+        "required": ["slides"],
+        "properties": {
+            "slides": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 40,
+                "items": {
+                    "type": "object",
+                    "required": ["title", "bullets", "footer_right"],
+                    "properties": {
+                        "title": {"type": "string", "maxLength": 90},
+                        "bullets": {
+                            "type": "array", "minItems": 1, "maxItems": 8,
+                            "items": {"type": "string", "maxLength": 240},
+                        },
+                        "footer_right": {"type": "string", "maxLength": 120},
+                    },
+                },
+            }
+        },
+    }
+
+
+def normalize_deck_payload(payload: dict[str, object], *, report_title: str,
+                           image_paths: tuple[Path, ...] = ()) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise DeckContentError("The PowerPoint content JSON must contain one object.")
     title = _text(report_title, "Presentation title", limit=90)
@@ -154,3 +175,15 @@ def validate_deck_content(source: Path, *, report_title: str, image_paths: tuple
             slide["footer_right"] = "Source: Uploaded content"
         slides.append(slide)
     return {"title": title, "slides": slides}
+
+
+def validate_deck_content(source: Path, *, report_title: str, image_paths: tuple[Path, ...] = ()) -> dict[str, object]:
+    if source.suffix.lower() != ".json":
+        raise DeckContentError(
+            "This build accepts a structured .json content package. General document synthesis requires an AI provider."
+        )
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise DeckContentError("The PowerPoint content JSON is invalid.") from exc
+    return normalize_deck_payload(payload, report_title=report_title, image_paths=image_paths)

@@ -121,6 +121,7 @@ class PrivacyScanner:
 
         for path in paths:
             try:
+                findings.extend(self._scan_text(path.name, "filename", path.name))
                 chunks = self._extract_text(path)
                 for source, text in chunks:
                     findings.extend(self._scan_text(path.name, source, text))

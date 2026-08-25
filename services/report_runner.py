@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import datetime as dt
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -11,20 +12,36 @@ from openpyxl import load_workbook
 from pypdf import PdfReader
 
 from core.session import ReportSession
+from core.structured_agent import StructuredAgent
+from extraction.content import ContentExtractor
 from generators.excel_workbook import (
     HoldingsWorkbookConfig,
     build_holdings_snapshot,
     build_holdings_workbook,
     load_holdings,
 )
+from generators.client_deck import ClientDeckData, build_client_deck
+from generators.client_deck_content import (
+    client_deck_schema,
+    normalize_client_deck_payload,
+)
 from generators.excel_to_pdf import (
     ReviewDefinition,
     StockReviewConfig,
     build_stock_review_pdf,
 )
-from generators.powerpoint_content import validate_deck_content
+from generators.powerpoint_content import (
+    deck_content_schema,
+    normalize_deck_payload,
+    validate_deck_content,
+)
+from providers.base import StructuredProvider, StructuredRequest
+from providers.registry import provider_from_environment
 from quality.output_qa import OutputInspector
+from quality.grounding import verify_numeric_grounding
+from security.privacy import PrivacyScanner
 from services.powerpoint_com import build_powerpoint_deck
+from services.conversion import convert_pptx_to_pdf
 from tools.filenames import sanitize_filename, versioned_output_path
 
 
@@ -58,6 +75,8 @@ class PreparedReport:
 PDFBuilder = Callable[[Path, Path, StockReviewConfig], Path]
 WorkbookBuilder = Callable[[tuple, HoldingsWorkbookConfig, Path], Path]
 PowerPointBuilder = Callable[..., tuple[Path, Path]]
+ClientDeckBuilder = Callable[[ClientDeckData, Path], Path]
+PresentationConverter = Callable[[Path, Path], Path]
 
 
 def _single_file(selections: dict[str, tuple[Path, ...]], slot: str) -> Path:
@@ -130,27 +149,100 @@ class ReportRunner:
         workbook_builder: WorkbookBuilder | None = None,
         workbook_preview_builder: WorkbookBuilder | None = None,
         powerpoint_builder: PowerPointBuilder | None = None,
+        provider: StructuredProvider | None = None,
+        client_deck_builder: ClientDeckBuilder | None = None,
+        presentation_converter: PresentationConverter | None = None,
     ):
         self.session_root = session_root
         self.pdf_builder = pdf_builder or build_stock_review_pdf
         self.workbook_builder = workbook_builder or build_holdings_workbook
         self.workbook_preview_builder = workbook_preview_builder or build_holdings_snapshot
         self.powerpoint_builder = powerpoint_builder or build_powerpoint_deck
+        self.provider = provider or provider_from_environment()
+        self.client_deck_builder = client_deck_builder or build_client_deck
+        self.presentation_converter = presentation_converter or convert_pptx_to_pdf
 
     def prepare(self, request: ReportRunRequest) -> PreparedReport:
+        source_paths = [path for paths in request.selections.values() for path in paths]
+        privacy = PrivacyScanner().scan_files(source_paths)
+        if not privacy.approved:
+            categories = sorted({finding.category.value for finding in privacy.findings})
+            details = []
+            if categories:
+                details.append("remove " + ", ".join(categories))
+            if privacy.errors:
+                details.append("replace files that could not be inspected")
+            raise ReportRunError("Privacy check failed: " + "; ".join(details) + ".")
         if request.custom_prompt.strip():
             raise ReportRunError(
                 "Custom-section generation is not enabled yet; remove it before generating this report."
             )
         if request.skill_id not in {
-            "template-pdf-report", "excel-workbook-builder", "powerpoint-deck-builder"
+            "client-deck-builder", "template-pdf-report", "excel-workbook-builder",
+            "powerpoint-deck-builder",
         }:
             raise ReportRunError("This report generator is not connected yet.")
         session = ReportSession.create(self.session_root)
         try:
             staged = _stage_inputs(session, request.selections)
+            if request.skill_id == "client-deck-builder":
+                required_options = ("client_name", "period", "as_of", "report_date")
+                missing = [key.replace("_", " ") for key in required_options if not request.options.get(key, "").strip()]
+                if missing:
+                    raise ReportRunError("Missing report detail(s): " + ", ".join(missing))
+                try:
+                    report_date = dt.date.fromisoformat(request.options["report_date"].strip())
+                except ValueError as exc:
+                    raise ReportRunError("Report date must use YYYY-MM-DD format.") from exc
+                source_paths = tuple(
+                    path for slot_paths in staged.values() for path in slot_paths
+                )
+                fragments = ContentExtractor().extract(list(source_paths))
+                included_slots = ", ".join(sorted(staged))
+                structured_request = StructuredRequest(
+                    task_name="client-deck",
+                    instructions=(
+                        "Map the approved portfolio-review sources into the Client Deck JSON contract. "
+                        "Copy values exactly; do not calculate missing fields or infer investment conclusions. "
+                        "Returns and contributions must be decimal numbers (0.052 means 5.20%); sector exposures "
+                        "must be percentage points (5.20 means 5.20%). Include optional_sections only when the "
+                        f"corresponding real source is present. Uploaded sections: {included_slots}. "
+                        "Every sources value must name the source file and page, row, or slide locator."
+                    ),
+                    json_schema=client_deck_schema(),
+                    sources=fragments,
+                    privacy_approved=True,
+                )
+                deck_data = StructuredAgent(self.provider).run(
+                    structured_request,
+                    lambda payload: self._validated_client_deck(
+                        payload, fragments, request.options
+                    ),
+                )
+                intermediate = session.working / "client-deck.pptx"
+                preview = session.preview / "report.pdf"
+                self.client_deck_builder(deck_data, intermediate)
+                self.presentation_converter(intermediate, preview)
+                deck_qa = OutputInspector().inspect(intermediate)
+                preview_qa = OutputInspector().inspect(preview)
+                if (
+                    not deck_qa.approved
+                    or not preview_qa.approved
+                    or deck_qa.page_or_sheet_count != preview_qa.page_or_sheet_count
+                ):
+                    raise ReportRunError("The Client Deck or its PDF preview failed integrity checks.")
+                client_slug = request.options["client_name"].strip().replace(" ", "_")
+                filename = sanitize_filename(
+                    f"{client_slug}_{report_date.isoformat()}_PortfolioReview.pdf"
+                )
+                return PreparedReport(
+                    session, preview, preview, filename, preview_qa.page_or_sheet_count
+                )
+
             if request.skill_id == "powerpoint-deck-builder":
-                source = _single_file(staged, "content")
+                sources = staged.get("content", ())
+                if not sources:
+                    raise ReportRunError("At least one deck content file is required.")
                 report_title = request.options.get("report_title", "").strip()
                 if not report_title:
                     raise ReportRunError("Presentation title is required.")
@@ -161,7 +253,33 @@ class ReportRunner:
                 if template is not None and template.suffix.lower() != ".pptx":
                     raise ReportRunError("The PowerPoint reference must be a .pptx file.")
                 images = staged.get("charts", ())
-                content = validate_deck_content(source, report_title=report_title, image_paths=images)
+                json_sources = [path for path in sources if path.suffix.lower() == ".json"]
+                if json_sources:
+                    if len(sources) != 1:
+                        raise ReportRunError("Use one JSON package by itself, or use source documents without JSON.")
+                    content = validate_deck_content(
+                        json_sources[0], report_title=report_title, image_paths=images
+                    )
+                else:
+                    fragments = ContentExtractor().extract(list(sources))
+                    structured_request = StructuredRequest(
+                        task_name="powerpoint-deck",
+                        instructions=(
+                            "Create a concise, client-ready financial presentation from the supplied sources. "
+                            "Each slide must advance a clear narrative and use only facts present in the sources. "
+                            "Use source filenames and page/row/slide locators in each footer_right line. "
+                            "Do not add external facts, recommendations, dates, values, or conclusions."
+                        ),
+                        json_schema=deck_content_schema(),
+                        sources=fragments,
+                        privacy_approved=True,
+                    )
+                    content = StructuredAgent(self.provider).run(
+                        structured_request,
+                        lambda payload: self._validated_powerpoint_content(
+                            payload, fragments, report_title, images
+                        ),
+                    )
                 artifact = session.working / "report.pptx"
                 preview = session.preview / "report.pdf"
                 self.powerpoint_builder(content, artifact, preview, template_path=template)
@@ -251,6 +369,31 @@ class ReportRunner:
 
     def cancel(self, prepared: PreparedReport) -> None:
         prepared.session.cleanup()
+
+    @staticmethod
+    def _validated_client_deck(payload: dict[str, object], fragments, options) -> ClientDeckData:
+        verify_numeric_grounding(
+            payload,
+            fragments,
+            excluded_keys=frozenset({"sources", "earnings_years"}),
+        )
+        return normalize_client_deck_payload(
+            payload,
+            client_name=options["client_name"],
+            period=options["period"],
+            as_of=options["as_of"],
+        )
+
+    @staticmethod
+    def _validated_powerpoint_content(payload, fragments, report_title, images):
+        verify_numeric_grounding(
+            payload,
+            fragments,
+            excluded_keys=frozenset({"footer_right", "footer_left", "header_right"}),
+        )
+        return normalize_deck_payload(
+            payload, report_title=report_title, image_paths=images
+        )
 
     def run(self, request: ReportRunRequest, output_directory: Path) -> GenerationResult:
         """Non-UI convenience method that prepares and immediately finalizes."""

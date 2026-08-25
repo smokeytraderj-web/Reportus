@@ -132,6 +132,11 @@ class InputValidator:
         return issues
 
     def _validate_structure(self, path: Path, extension: str) -> None:
+        if extension in {".txt", ".md"}:
+            text = path.read_text(encoding="utf-8-sig", errors="strict")
+            if not text.strip():
+                raise ValueError("The text file contains no content.")
+            return
         if extension == ".json":
             with path.open("r", encoding="utf-8-sig") as stream:
                 payload = json.load(stream)

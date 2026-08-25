@@ -5,10 +5,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from generators.powerpoint_content import DeckContentError, validate_deck_content
+from generators.powerpoint_content import (
+    DeckContentError,
+    deck_content_schema,
+    validate_deck_content,
+)
 
 
 class PowerPointContentTests(unittest.TestCase):
+    def test_provider_schema_requires_bounded_slides(self) -> None:
+        schema = deck_content_schema()
+        slides = schema["properties"]["slides"]
+        self.assertEqual(slides["maxItems"], 40)
+        self.assertEqual(slides["items"]["properties"]["bullets"]["maxItems"], 8)
+
     def test_normalizes_supported_layouts_and_adds_source_footer(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "content.json"

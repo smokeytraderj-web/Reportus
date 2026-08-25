@@ -7,7 +7,8 @@
       "fields": [
         {"id": "client_name", "label": "Client or household", "placeholder": "e.g., Sample Household"},
         {"id": "period", "label": "Review period", "placeholder": "e.g., August 2026"},
-        {"id": "as_of", "label": "As-of label", "placeholder": "e.g., As of August 25, 2026"}
+        {"id": "as_of", "label": "As-of label", "placeholder": "e.g., As of August 25, 2026"},
+        {"id": "report_date", "label": "Report date", "placeholder": "YYYY-MM-DD"}
       ],
       "required_uploads": [
         {"id": "risk_snapshot", "label": "Risk snapshot", "description": "Risk score, allocation, range, and portfolio metrics.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv", ".png", ".jpg", ".jpeg"]},
@@ -59,7 +60,7 @@
         {"id": "report_title", "label": "Presentation title", "placeholder": "e.g., Quarterly Portfolio Review"}
       ],
       "required_uploads": [
-        {"id": "content", "label": "Deck content", "description": "Source data, outline, documents, or a structured JSON content package.", "accepted_extensions": [".json", ".docx", ".pdf", ".xlsx", ".xlsm", ".csv", ".tsv", ".pptx"]}
+        {"id": "content", "label": "Deck content", "description": "Source data, outline, documents, or a structured JSON content package.", "accepted_extensions": [".json", ".txt", ".md", ".docx", ".pdf", ".xlsx", ".xlsm", ".csv", ".tsv", ".pptx"]}
       ],
       "optional_uploads": [
         {"id": "charts", "label": "Charts and images", "description": "Optional visual material for slides.", "accepted_extensions": [".png", ".jpg", ".jpeg", ".pdf"]},
