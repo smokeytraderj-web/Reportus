@@ -166,13 +166,13 @@ def add_crest(slide, center_x, top):
     add_text(slide, center_x - Inches(0.75), top + outer_d / 2 - Inches(0.28), Inches(1.5), Inches(0.56),
               "GS", 28, GOLD, font=TITLE_FONT, bold=True, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
     add_text(slide, center_x - Inches(2.25), top + outer_d + Inches(0.12), Inches(4.5), Inches(0.3),
-              "GOTTFRIED & SOMBERG WEALTH MANAGEMENT, LLC", 9, GOLD, font=BODY_FONT,
+              "GOTTFRIED & SOMBERG WEALTH MANAGEMENT", 9, GOLD, font=BODY_FONT,
               align=PP_ALIGN.CENTER, spacing=1.5)
 
 
 def add_footer(slide, page_no, total):
     add_text(slide, Inches(0.75), Inches(7.14), Inches(5.0), Inches(0.25),
-              "Gottfried & Somberg Wealth Management, LLC", 9, FOOTER_GRAY, font=BODY_FONT)
+              "Gottfried & Somberg Wealth Management", 9, FOOTER_GRAY, font=BODY_FONT)
     add_text(slide, Inches(9.583), Inches(7.14), Inches(3.0), Inches(0.25),
               f"Page {page_no} of {total}", 9, FOOTER_GRAY, font=BODY_FONT, align=PP_ALIGN.RIGHT)
 
@@ -293,7 +293,7 @@ def add_toc_slide(prs, blank, sections, total):
                   anchor=MSO_ANCHOR.MIDDLE)
 
     add_text(s, Inches(0.9), Inches(7.14), Inches(6.0), Inches(0.25),
-              "Gottfried & Somberg Wealth Management, LLC", 9, MUTED_ON_NAVY, font=BODY_FONT)
+              "Gottfried & Somberg Wealth Management", 9, MUTED_ON_NAVY, font=BODY_FONT)
     add_text(s, Inches(9.583), Inches(7.14), Inches(2.85), Inches(0.25),
               f"Page 2 of {total}", 9, MUTED_ON_NAVY, font=BODY_FONT, align=PP_ALIGN.RIGHT)
     return s
