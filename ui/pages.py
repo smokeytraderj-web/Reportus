@@ -4,19 +4,28 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
+    QSplitter,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
+
+try:
+    from PySide6.QtPdf import QPdfDocument
+    from PySide6.QtPdfWidgets import QPdfView
+except ImportError:  # pragma: no cover - depends on the packaged Qt build
+    QPdfDocument = None
+    QPdfView = None
 
 from core.workflows import ReportWorkflow
 from security.privacy import PrivacyScanResult, PrivacyScanner
@@ -59,7 +68,7 @@ class HomePage(QWidget):
 
 class IntakePage(QWidget):
     back_requested = Signal()
-    review_ready = Signal(object, object, str)
+    review_ready = Signal(object, object, str, object)
 
     def __init__(
         self,
@@ -73,6 +82,7 @@ class IntakePage(QWidget):
         self.workflow: ReportWorkflow | None = None
         self.upload_boxes: dict[str, UploadBox] = {}
         self.optional_checks: dict[str, QCheckBox] = {}
+        self.field_inputs: dict[str, QLineEdit] = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(42, 28, 42, 32)
@@ -120,6 +130,28 @@ class IntakePage(QWidget):
         self.status.setText("Add the required files to continue.")
         self.status.setStyleSheet("")
         self._clear_content()
+
+        if workflow.fields:
+            details_title = QLabel("Report details")
+            details_title.setObjectName("SectionTitle")
+            self.content_layout.addWidget(details_title)
+            details_grid = QGridLayout()
+            details_grid.setHorizontalSpacing(18)
+            details_grid.setVerticalSpacing(9)
+            for index, field in enumerate(workflow.fields):
+                label = QLabel(field.label)
+                label.setObjectName("Muted")
+                editor = QLineEdit(field.default)
+                editor.setPlaceholderText(field.placeholder)
+                self.field_inputs[field.field_id] = editor
+                row, column = divmod(index, 2)
+                cell = QVBoxLayout()
+                cell.setSpacing(4)
+                cell.addWidget(label)
+                cell.addWidget(editor)
+                details_grid.addLayout(cell, row, column)
+            self.content_layout.addLayout(details_grid)
+            self.content_layout.addSpacing(10)
 
         required_title = QLabel("Required uploads")
         required_title.setObjectName("SectionTitle")
@@ -170,6 +202,7 @@ class IntakePage(QWidget):
     def _clear_content(self) -> None:
         self.upload_boxes.clear()
         self.optional_checks.clear()
+        self.field_inputs.clear()
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
             widget = item.widget()
@@ -179,11 +212,17 @@ class IntakePage(QWidget):
     def validate_and_review(self) -> None:
         if self.workflow is None:
             return
+        missing_fields = [
+            field.label
+            for field in self.workflow.fields
+            if field.required and not self.field_inputs[field.field_id].text().strip()
+        ]
         missing = [
             item.label
             for item in self.workflow.required_uploads
             if not self.upload_boxes[item.requirement_id].paths
         ]
+        missing = missing_fields + missing
         selected_optional_missing = [
             self.optional_checks[item.requirement_id].text()
             for item in self.workflow.optional_uploads
@@ -217,7 +256,13 @@ class IntakePage(QWidget):
 
         self.status.setText("Privacy and data-structure checks passed.")
         self.status.setStyleSheet(f"color: {SUCCESS};")
-        self.review_ready.emit(self.workflow, selections, self.custom_prompt.toPlainText().strip())
+        options = {
+            field_id: editor.text().strip()
+            for field_id, editor in self.field_inputs.items()
+        }
+        self.review_ready.emit(
+            self.workflow, selections, self.custom_prompt.toPlainText().strip(), options
+        )
 
     def _show_error(self, message: str) -> None:
         self.status.setText(message)
@@ -264,7 +309,7 @@ class ReviewPage(QWidget):
         layout.addStretch()
 
         action_row = QHBoxLayout()
-        self.note = QLabel("Generation execution will be connected in the next report phase.")
+        self.note = QLabel("Reportus will build, verify, and save only the final report.")
         self.note.setObjectName("Muted")
         generate = QPushButton("Generate report")
         generate.setObjectName("PrimaryButton")
@@ -279,6 +324,7 @@ class ReviewPage(QWidget):
         workflow: ReportWorkflow,
         selections: dict[str, tuple[Path, ...]],
         custom_prompt: str,
+        options: dict[str, str],
     ) -> None:
         while self.summary_layout.count():
             item = self.summary_layout.takeAt(0)
@@ -287,6 +333,11 @@ class ReviewPage(QWidget):
         report = QLabel(workflow.title)
         report.setObjectName("SectionTitle")
         self.summary_layout.addWidget(report)
+        labels = {field.field_id: field.label for field in workflow.fields}
+        for field_id, value in options.items():
+            row = QLabel(f"{labels.get(field_id, field_id)}:  {value}")
+            row.setObjectName("Muted")
+            self.summary_layout.addWidget(row)
         for slot_id, paths in selections.items():
             label = next(
                 (
@@ -304,3 +355,97 @@ class ReviewPage(QWidget):
             custom.setWordWrap(True)
             custom.setObjectName("Muted")
             self.summary_layout.addWidget(custom)
+
+
+class PreviewPage(QWidget):
+    """Full-document preview with a deliberately slim revision rail."""
+
+    finalize_requested = Signal()
+    cancel_requested = Signal()
+    revision_requested = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.document = None
+        root = QVBoxLayout(self)
+        root.setContentsMargins(32, 24, 32, 28)
+        root.setSpacing(12)
+
+        header = QHBoxLayout()
+        title = QLabel("Review report")
+        title.setObjectName("PageTitle")
+        self.status = QLabel("Prepared locally · not finalized")
+        self.status.setStyleSheet("color: #B49A58; font-size: 10px; font-weight: 700;")
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(self.status)
+        root.addLayout(header)
+
+        splitter = QSplitter()
+        if QPdfView is not None and QPdfDocument is not None:
+            self.viewer = QPdfView()
+            self.viewer.setPageMode(QPdfView.PageMode.MultiPage)
+            self.viewer.setZoomMode(QPdfView.ZoomMode.FitToWidth)
+            splitter.addWidget(self.viewer)
+        else:
+            self.viewer = QLabel("PDF preview is unavailable in this Qt installation.")
+            self.viewer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.viewer.setObjectName("Panel")
+            splitter.addWidget(self.viewer)
+
+        rail = QFrame()
+        rail.setObjectName("Panel")
+        rail.setMinimumWidth(250)
+        rail.setMaximumWidth(315)
+        rail_layout = QVBoxLayout(rail)
+        rail_layout.setContentsMargins(18, 18, 18, 18)
+        rail_layout.setSpacing(10)
+        rail_title = QLabel("Revision")
+        rail_title.setObjectName("SectionTitle")
+        rail_hint = QLabel("Describe one change at a time.")
+        rail_hint.setObjectName("Muted")
+        rail_hint.setWordWrap(True)
+        self.revision = QTextEdit()
+        self.revision.setPlaceholderText("e.g., shorten the notes on page 4…")
+        self.revision.setFixedHeight(110)
+        self.apply_revision = QPushButton("Apply revision")
+        self.apply_revision.setObjectName("SecondaryButton")
+        self.apply_revision.clicked.connect(self._request_revision)
+        rail_layout.addWidget(rail_title)
+        rail_layout.addWidget(rail_hint)
+        rail_layout.addWidget(self.revision)
+        rail_layout.addWidget(self.apply_revision)
+        rail_layout.addStretch()
+        splitter.addWidget(rail)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
+        root.addWidget(splitter, 1)
+
+        actions = QHBoxLayout()
+        cancel = QPushButton("Cancel report")
+        cancel.setObjectName("SecondaryButton")
+        cancel.clicked.connect(self.cancel_requested)
+        finalize = QPushButton("Finalize Report")
+        finalize.setObjectName("PrimaryButton")
+        finalize.clicked.connect(self.finalize_requested)
+        actions.addWidget(cancel)
+        actions.addStretch()
+        actions.addWidget(finalize)
+        root.addLayout(actions)
+
+    def set_report(self, path: Path, page_count: int | None) -> None:
+        count = f" · {page_count} page(s)" if page_count else ""
+        self.status.setText(f"Prepared locally{count} · not finalized")
+        self.revision.clear()
+        if QPdfDocument is not None and QPdfView is not None:
+            if self.document is not None:
+                self.document.close()
+                self.document.deleteLater()
+            self.document = QPdfDocument(self)
+            self.document.load(str(path))
+            self.viewer.setDocument(self.document)
+
+    def _request_revision(self) -> None:
+        prompt = self.revision.toPlainText().strip()
+        if prompt:
+            self.revision_requested.emit(prompt)

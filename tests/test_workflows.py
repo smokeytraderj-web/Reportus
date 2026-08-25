@@ -28,6 +28,17 @@ class WorkflowTests(unittest.TestCase):
             with self.subTest(workflow=workflow.skill_id):
                 self.assertEqual(len(ids), len(set(ids)))
 
+    def test_field_ids_are_unique_within_workflow(self) -> None:
+        for workflow in load_workflows():
+            ids = [field.field_id for field in workflow.fields]
+            with self.subTest(workflow=workflow.skill_id):
+                self.assertEqual(len(ids), len(set(ids)))
+
+    def test_initial_workflows_collect_report_titles(self) -> None:
+        for workflow in load_workflows():
+            with self.subTest(workflow=workflow.skill_id):
+                self.assertTrue(workflow.fields)
+
     def test_every_upload_declares_file_types(self) -> None:
         for workflow in load_workflows():
             for requirement in workflow.required_uploads + workflow.optional_uploads:

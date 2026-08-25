@@ -13,7 +13,7 @@ class InputValidatorTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
         self.requirement = UploadRequirement("data", "Source data", "Data", (".csv",))
-        self.workflow = ReportWorkflow("test", "Test", "Test", (self.requirement,), ())
+        self.workflow = ReportWorkflow("test", "Test", "Test", (), (self.requirement,), ())
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()

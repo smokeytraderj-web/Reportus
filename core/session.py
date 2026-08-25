@@ -48,6 +48,10 @@ class ReportSession:
     def preview(self) -> Path:
         return self.path / "preview"
 
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
     def cleanup(self) -> None:
         """Irrecoverably remove the application-owned session directory."""
 

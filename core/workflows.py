@@ -20,12 +20,24 @@ class UploadRequirement:
 
 
 @dataclass(frozen=True, slots=True)
+class ReportField:
+    """One concise user-supplied value required by a report generator."""
+
+    field_id: str
+    label: str
+    placeholder: str
+    required: bool = True
+    default: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class ReportWorkflow:
     """UI-facing intake contract for one report skill."""
 
     skill_id: str
     title: str
     subtitle: str
+    fields: tuple[ReportField, ...]
     required_uploads: tuple[UploadRequirement, ...]
     optional_uploads: tuple[UploadRequirement, ...]
 
@@ -42,6 +54,19 @@ def _requirements(items: list[dict[str, str]]) -> tuple[UploadRequirement, ...]:
     )
 
 
+def _fields(items: list[dict[str, object]]) -> tuple[ReportField, ...]:
+    return tuple(
+        ReportField(
+            field_id=str(item["id"]),
+            label=str(item["label"]),
+            placeholder=str(item.get("placeholder", "")),
+            required=bool(item.get("required", True)),
+            default=str(item.get("default", "")),
+        )
+        for item in items
+    )
+
+
 def load_workflows(path: Path | None = None) -> tuple[ReportWorkflow, ...]:
     """Load the small UI manifest without loading any skill instructions."""
 
@@ -52,6 +77,7 @@ def load_workflows(path: Path | None = None) -> tuple[ReportWorkflow, ...]:
             skill_id=item["skill_id"],
             title=item["title"],
             subtitle=item["subtitle"],
+            fields=_fields(item.get("fields", [])),
             required_uploads=_requirements(item.get("required_uploads", [])),
             optional_uploads=_requirements(item.get("optional_uploads", [])),
         )

@@ -4,6 +4,11 @@
       "skill_id": "client-deck-builder",
       "title": "Client Deck",
       "subtitle": "Build a complete client portfolio review.",
+      "fields": [
+        {"id": "client_name", "label": "Client or household", "placeholder": "e.g., Sample Household"},
+        {"id": "period", "label": "Review period", "placeholder": "e.g., August 2026"},
+        {"id": "as_of", "label": "As-of label", "placeholder": "e.g., As of August 25, 2026"}
+      ],
       "required_uploads": [
         {"id": "risk_snapshot", "label": "Risk snapshot", "description": "Risk score, allocation, range, and portfolio metrics.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv", ".png", ".jpg", ".jpeg"]},
         {"id": "attribution", "label": "Attribution report", "description": "Performance contribution and holding-level results.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv"]},
@@ -19,6 +24,12 @@
       "skill_id": "template-pdf-report",
       "title": "Excel to PDF",
       "subtitle": "Rebuild a polished PDF from fresh spreadsheet data.",
+      "fields": [
+        {"id": "client_name", "label": "Client or household", "placeholder": "e.g., Sample Household"},
+        {"id": "period_label", "label": "Report period", "placeholder": "e.g., 2026 Review"},
+        {"id": "report_title", "label": "Report title", "placeholder": "e.g., Recommendations Review", "default": "Recommendations Review"},
+        {"id": "source_label", "label": "Source label", "placeholder": "e.g., YCharts workbook, August 25, 2026", "default": "Uploaded workbook"}
+      ],
       "required_uploads": [
         {"id": "spreadsheet", "label": "Spreadsheet data", "description": "The workbook or CSV containing the refreshed report data.", "accepted_extensions": [".xlsx", ".xlsm", ".csv", ".tsv"]},
         {"id": "template", "label": "Reference PDF", "description": "The approved visual template or gold-standard report.", "accepted_extensions": [".pdf"]}
@@ -29,6 +40,9 @@
       "skill_id": "excel-workbook-builder",
       "title": "Excel Workbook",
       "subtitle": "Create a clean, formatted financial workbook.",
+      "fields": [
+        {"id": "report_title", "label": "Workbook title", "placeholder": "e.g., Portfolio Analysis"}
+      ],
       "required_uploads": [
         {"id": "source_data", "label": "Source data", "description": "Workbook, CSV, or supporting files used to build the output.", "accepted_extensions": [".xlsx", ".xlsm", ".csv", ".tsv"]}
       ],
@@ -40,6 +54,9 @@
       "skill_id": "powerpoint-deck-builder",
       "title": "PowerPoint Deck",
       "subtitle": "Create an editable branded presentation.",
+      "fields": [
+        {"id": "report_title", "label": "Presentation title", "placeholder": "e.g., Quarterly Portfolio Review"}
+      ],
       "required_uploads": [
         {"id": "content", "label": "Deck content", "description": "Source data, outline, or documents for the presentation.", "accepted_extensions": [".docx", ".pdf", ".xlsx", ".xlsm", ".csv", ".tsv", ".pptx"]}
       ],
