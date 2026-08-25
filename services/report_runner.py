@@ -11,6 +11,12 @@ from openpyxl import load_workbook
 from pypdf import PdfReader
 
 from core.session import ReportSession
+from generators.excel_workbook import (
+    HoldingsWorkbookConfig,
+    build_holdings_snapshot,
+    build_holdings_workbook,
+    load_holdings,
+)
 from generators.excel_to_pdf import (
     ReviewDefinition,
     StockReviewConfig,
@@ -41,12 +47,14 @@ class GenerationResult:
 @dataclass(frozen=True, slots=True)
 class PreparedReport:
     session: ReportSession
+    artifact_path: Path
     preview_path: Path
     suggested_filename: str
     page_or_sheet_count: int | None
 
 
 PDFBuilder = Callable[[Path, Path, StockReviewConfig], Path]
+WorkbookBuilder = Callable[[tuple, HoldingsWorkbookConfig, Path], Path]
 
 
 def _single_file(selections: dict[str, tuple[Path, ...]], slot: str) -> Path:
@@ -111,20 +119,52 @@ def _stage_inputs(session: ReportSession, selections: dict[str, tuple[Path, ...]
 class ReportRunner:
     """Dispatch a report request and retain only its approved final artifact."""
 
-    def __init__(self, *, session_root: Path | None = None, pdf_builder: PDFBuilder | None = None):
+    def __init__(
+        self,
+        *,
+        session_root: Path | None = None,
+        pdf_builder: PDFBuilder | None = None,
+        workbook_builder: WorkbookBuilder | None = None,
+        workbook_preview_builder: WorkbookBuilder | None = None,
+    ):
         self.session_root = session_root
         self.pdf_builder = pdf_builder or build_stock_review_pdf
+        self.workbook_builder = workbook_builder or build_holdings_workbook
+        self.workbook_preview_builder = workbook_preview_builder or build_holdings_snapshot
 
     def prepare(self, request: ReportRunRequest) -> PreparedReport:
         if request.custom_prompt.strip():
             raise ReportRunError(
                 "Custom-section generation is not enabled yet; remove it before generating this report."
             )
-        if request.skill_id != "template-pdf-report":
+        if request.skill_id not in {"template-pdf-report", "excel-workbook-builder"}:
             raise ReportRunError("This report generator is not connected yet.")
         session = ReportSession.create(self.session_root)
         try:
             staged = _stage_inputs(session, request.selections)
+            if request.skill_id == "excel-workbook-builder":
+                if staged.get("style_reference"):
+                    raise ReportRunError("Custom workbook style references are not connected yet.")
+                source = _single_file(staged, "source_data")
+                report_title = request.options.get("report_title", "").strip()
+                source_label = request.options.get("source_label", "").strip()
+                if not report_title or not source_label:
+                    raise ReportRunError("Workbook title and source label are required.")
+                holdings = load_holdings(source)
+                workbook_config = HoldingsWorkbookConfig(report_title, source_label)
+                artifact = session.working / "report.xlsx"
+                preview = session.preview / "report.pdf"
+                self.workbook_builder(holdings, workbook_config, artifact)
+                self.workbook_preview_builder(holdings, workbook_config, preview)
+                artifact_qa = OutputInspector().inspect(artifact)
+                preview_qa = OutputInspector().inspect(preview)
+                if not artifact_qa.approved or not preview_qa.approved:
+                    raise ReportRunError("The generated workbook or preview failed integrity checks.")
+                filename = sanitize_filename(f"{report_title}.xlsx")
+                return PreparedReport(
+                    session, artifact, preview, filename, artifact_qa.page_or_sheet_count
+                )
+
             workbook = _single_file(staged, "spreadsheet")
             template = _single_file(staged, "template")
             _validate_landscape_letter_template(template)
@@ -147,7 +187,9 @@ class ReportRunner:
                 raise ReportRunError("The generated report failed final integrity checks.")
 
             filename = sanitize_filename(f"{config.client_name} - {config.report_title}.pdf")
-            return PreparedReport(session, preview_pdf, filename, qa.page_or_sheet_count)
+            return PreparedReport(
+                session, preview_pdf, preview_pdf, filename, qa.page_or_sheet_count
+            )
         except Exception:
             session.cleanup()
             raise
@@ -155,12 +197,12 @@ class ReportRunner:
     def finalize(self, prepared: PreparedReport, output_directory: Path) -> GenerationResult:
         """Copy an approved preview to final storage, verify it, then purge the session."""
 
-        preview_qa = OutputInspector().inspect(prepared.preview_path)
-        if not preview_qa.approved:
-            raise ReportRunError("The report preview is no longer available or valid.")
+        artifact_qa = OutputInspector().inspect(prepared.artifact_path)
+        if not artifact_qa.approved:
+            raise ReportRunError("The prepared report is no longer available or valid.")
         output_directory.mkdir(parents=True, exist_ok=True)
         final_path = versioned_output_path(output_directory, prepared.suggested_filename)
-        shutil.copy2(prepared.preview_path, final_path)
+        shutil.copy2(prepared.artifact_path, final_path)
         final_qa = OutputInspector().inspect(final_path)
         if not final_qa.approved:
             final_path.unlink(missing_ok=True)

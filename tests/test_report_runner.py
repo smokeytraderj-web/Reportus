@@ -31,6 +31,32 @@ def _make_template(path: Path) -> None:
 
 
 class ReportRunnerTests(unittest.TestCase):
+    def test_prepares_and_finalizes_excel_workbook(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "holdings.csv"
+            source.write_text(
+                "Description,Symbol,Quantity,Price,Value,% of Assets\n"
+                "Sample Holding,SAM,10,20,200,100%\n",
+                encoding="utf-8",
+            )
+            request = ReportRunRequest(
+                "excel-workbook-builder",
+                {"source_data": (source,)},
+                {"report_title": "Holdings Summary", "source_label": "Synthetic data"},
+            )
+            runner = ReportRunner(session_root=root / "sessions")
+
+            prepared = runner.prepare(request)
+
+            self.assertEqual(prepared.artifact_path.suffix, ".xlsx")
+            self.assertEqual(prepared.preview_path.suffix, ".pdf")
+            self.assertTrue(prepared.artifact_path.is_file())
+            self.assertTrue(prepared.preview_path.is_file())
+            result = runner.finalize(prepared, root / "final")
+            self.assertEqual(result.output_path.name, "Holdings Summary.xlsx")
+            self.assertTrue(result.output_path.is_file())
+
     def test_prepare_keeps_preview_until_finalize(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

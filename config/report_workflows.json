@@ -41,7 +41,8 @@
       "title": "Excel Workbook",
       "subtitle": "Create a clean, formatted financial workbook.",
       "fields": [
-        {"id": "report_title", "label": "Workbook title", "placeholder": "e.g., Portfolio Analysis"}
+        {"id": "report_title", "label": "Workbook title", "placeholder": "e.g., Holdings Summary", "default": "Holdings Summary"},
+        {"id": "source_label", "label": "Source label", "placeholder": "e.g., Custodial export, August 25, 2026", "default": "Uploaded source data"}
       ],
       "required_uploads": [
         {"id": "source_data", "label": "Source data", "description": "Workbook, CSV, or supporting files used to build the output.", "accepted_extensions": [".xlsx", ".xlsm", ".csv", ".tsv"]}
