@@ -1,0 +1,38 @@
+{
+  "skills": [
+    {
+      "id": "client-deck-builder",
+      "label": "Client Deck",
+      "kind": "report",
+      "menu_order": 1,
+      "enabled": true
+    },
+    {
+      "id": "template-pdf-report",
+      "label": "Excel to PDF",
+      "kind": "report",
+      "menu_order": 2,
+      "enabled": true
+    },
+    {
+      "id": "excel-workbook-builder",
+      "label": "Excel Workbook",
+      "kind": "report",
+      "menu_order": 3,
+      "enabled": true
+    },
+    {
+      "id": "powerpoint-deck-builder",
+      "label": "PowerPoint Deck",
+      "kind": "report",
+      "menu_order": 4,
+      "enabled": true
+    },
+    {
+      "id": "ycharts-performance-charts",
+      "label": "YCharts Performance Charts",
+      "kind": "capability",
+      "enabled": true
+    }
+  ]
+}
