@@ -7,9 +7,10 @@ A minimal Windows desktop application for building polished financial reports fr
 - Four skill-driven intake flows with local privacy and structural validation.
 - Excel-to-PDF stock-review generation using the supplied GSWM template skill.
 - Excel Workbook generation in the current clean/minimal GSWM holdings style, with a matching PDF review snapshot.
+- PowerPoint Deck generation from a strict JSON content package through the supplied Windows PowerPoint/GSWM-template workflow.
 - Client Deck PPTX/PDF generation engine with synthetic end-to-end coverage.
 - Isolated report sessions, embedded PDF review, explicit finalization, automatic filename versioning, and verified cleanup.
-- PowerPoint Deck, custom sections, external research, and revision execution remain in development.
+- General document-to-deck synthesis, custom sections, external research, and revision execution remain in development.
 
 ## Development
 

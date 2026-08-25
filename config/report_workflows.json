@@ -59,7 +59,7 @@
         {"id": "report_title", "label": "Presentation title", "placeholder": "e.g., Quarterly Portfolio Review"}
       ],
       "required_uploads": [
-        {"id": "content", "label": "Deck content", "description": "Source data, outline, or documents for the presentation.", "accepted_extensions": [".docx", ".pdf", ".xlsx", ".xlsm", ".csv", ".tsv", ".pptx"]}
+        {"id": "content", "label": "Deck content", "description": "Source data, outline, documents, or a structured JSON content package.", "accepted_extensions": [".json", ".docx", ".pdf", ".xlsx", ".xlsm", ".csv", ".tsv", ".pptx"]}
       ],
       "optional_uploads": [
         {"id": "charts", "label": "Charts and images", "description": "Optional visual material for slides.", "accepted_extensions": [".png", ".jpg", ".jpeg", ".pdf"]},

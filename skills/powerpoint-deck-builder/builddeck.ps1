@@ -67,6 +67,7 @@ $ChartAreaWidthPt = 502   # 404 -> 906
 $ChartAreaHeightPt = 320
 
 $content = Get-Content -Raw -Path $ContentPath -Encoding UTF8 | ConvertFrom-Json
+$contentDir = Split-Path -Parent ([System.IO.Path]::GetFullPath($ContentPath))
 
 $outputFull = [System.IO.Path]::GetFullPath($OutputPath)
 New-Item -ItemType Directory -Force -Path (Split-Path $outputFull) | Out-Null
@@ -220,6 +221,11 @@ try {
             $chartImg = $null
             $ciProp = $s.PSObject.Properties['chart_image']
             if ($null -ne $ciProp -and $ciProp.Value) { $chartImg = [string]$ciProp.Value }
+
+            if ($chartImg -and -not [System.IO.Path]::IsPathRooted($chartImg)) {
+                $chartImg = Join-Path $contentDir $chartImg
+            }
+            if ($chartImg -and -not (Test-Path $chartImg)) { throw "Image not found: $chartImg" }
 
             $FullLeft = 80; $FullTop = 138; $FullWidth = 800; $FullHeight = 286
             if ($chartImg -and (Test-Path $chartImg)) {
@@ -622,6 +628,11 @@ try {
             $chartImg = $null
             $ciProp = $s.PSObject.Properties['chart_image']
             if ($null -ne $ciProp -and $ciProp.Value) { $chartImg = [string]$ciProp.Value }
+
+            if ($chartImg -and -not [System.IO.Path]::IsPathRooted($chartImg)) {
+                $chartImg = Join-Path $contentDir $chartImg
+            }
+            if ($chartImg -and -not (Test-Path $chartImg)) { throw "Image not found: $chartImg" }
 
             if ($chartImg -and (Test-Path $chartImg)) {
                 # AddPicture(FileName, LinkToFile, SaveWithDocument, Left, Top, Width, Height)

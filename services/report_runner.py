@@ -22,7 +22,9 @@ from generators.excel_to_pdf import (
     StockReviewConfig,
     build_stock_review_pdf,
 )
+from generators.powerpoint_content import validate_deck_content
 from quality.output_qa import OutputInspector
+from services.powerpoint_com import build_powerpoint_deck
 from tools.filenames import sanitize_filename, versioned_output_path
 
 
@@ -55,6 +57,7 @@ class PreparedReport:
 
 PDFBuilder = Callable[[Path, Path, StockReviewConfig], Path]
 WorkbookBuilder = Callable[[tuple, HoldingsWorkbookConfig, Path], Path]
+PowerPointBuilder = Callable[..., tuple[Path, Path]]
 
 
 def _single_file(selections: dict[str, tuple[Path, ...]], slot: str) -> Path:
@@ -126,22 +129,58 @@ class ReportRunner:
         pdf_builder: PDFBuilder | None = None,
         workbook_builder: WorkbookBuilder | None = None,
         workbook_preview_builder: WorkbookBuilder | None = None,
+        powerpoint_builder: PowerPointBuilder | None = None,
     ):
         self.session_root = session_root
         self.pdf_builder = pdf_builder or build_stock_review_pdf
         self.workbook_builder = workbook_builder or build_holdings_workbook
         self.workbook_preview_builder = workbook_preview_builder or build_holdings_snapshot
+        self.powerpoint_builder = powerpoint_builder or build_powerpoint_deck
 
     def prepare(self, request: ReportRunRequest) -> PreparedReport:
         if request.custom_prompt.strip():
             raise ReportRunError(
                 "Custom-section generation is not enabled yet; remove it before generating this report."
             )
-        if request.skill_id not in {"template-pdf-report", "excel-workbook-builder"}:
+        if request.skill_id not in {
+            "template-pdf-report", "excel-workbook-builder", "powerpoint-deck-builder"
+        }:
             raise ReportRunError("This report generator is not connected yet.")
         session = ReportSession.create(self.session_root)
         try:
             staged = _stage_inputs(session, request.selections)
+            if request.skill_id == "powerpoint-deck-builder":
+                source = _single_file(staged, "content")
+                report_title = request.options.get("report_title", "").strip()
+                if not report_title:
+                    raise ReportRunError("Presentation title is required.")
+                references = staged.get("reference", ())
+                if len(references) > 1:
+                    raise ReportRunError("Use at most one PowerPoint reference template.")
+                template = references[0] if references else None
+                if template is not None and template.suffix.lower() != ".pptx":
+                    raise ReportRunError("The PowerPoint reference must be a .pptx file.")
+                images = staged.get("charts", ())
+                content = validate_deck_content(source, report_title=report_title, image_paths=images)
+                artifact = session.working / "report.pptx"
+                preview = session.preview / "report.pdf"
+                self.powerpoint_builder(content, artifact, preview, template_path=template)
+                artifact_qa = OutputInspector().inspect(artifact)
+                preview_qa = OutputInspector().inspect(preview)
+                if (
+                    not artifact_qa.approved
+                    or not preview_qa.approved
+                    or artifact_qa.page_or_sheet_count != preview_qa.page_or_sheet_count
+                ):
+                    raise ReportRunError("The presentation or its preview failed integrity checks.")
+                return PreparedReport(
+                    session,
+                    artifact,
+                    preview,
+                    sanitize_filename(f"{report_title}.pptx"),
+                    artifact_qa.page_or_sheet_count,
+                )
+
             if request.skill_id == "excel-workbook-builder":
                 if staged.get("style_reference"):
                     raise ReportRunError("Custom workbook style references are not connected yet.")

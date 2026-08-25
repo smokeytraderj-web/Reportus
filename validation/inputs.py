@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import zipfile
 from dataclasses import dataclass
 from enum import StrEnum
@@ -131,6 +132,12 @@ class InputValidator:
         return issues
 
     def _validate_structure(self, path: Path, extension: str) -> None:
+        if extension == ".json":
+            with path.open("r", encoding="utf-8-sig") as stream:
+                payload = json.load(stream)
+            if not isinstance(payload, (dict, list)):
+                raise ValueError("The JSON file must contain an object or list.")
+            return
         if extension in {".csv", ".tsv"}:
             delimiter = "\t" if extension == ".tsv" else ","
             with path.open("r", encoding="utf-8-sig", errors="strict", newline="") as stream:

@@ -50,6 +50,16 @@ class InputValidatorTests(unittest.TestCase):
         self.assertFalse(result.approved)
         self.assertEqual(result.errors[0].code, "file_empty")
 
+    def test_json_structure_is_supported(self) -> None:
+        source = self.root / "content.json"
+        source.write_text('{"slides": []}', encoding="utf-8")
+        requirement = UploadRequirement("data", "Source data", "Data", (".json",))
+        workflow = ReportWorkflow("test", "Test", "Test", (), (requirement,), ())
+
+        result = InputValidator().validate(workflow, {"data": (source,)})
+
+        self.assertTrue(result.approved)
+
 
 if __name__ == "__main__":
     unittest.main()

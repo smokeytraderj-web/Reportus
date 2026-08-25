@@ -1,6 +1,8 @@
 """Tests for isolated report execution and final-output retention."""
 
 import datetime as dt
+import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,6 +33,41 @@ def _make_template(path: Path) -> None:
 
 
 class ReportRunnerTests(unittest.TestCase):
+    def test_prepares_and_finalizes_powerpoint_json_package(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "content.json"
+            source.write_text(json.dumps({
+                "slides": [{"title": "The portfolio remains balanced", "bullets": ["Risk remains within the agreed range."]}]
+            }), encoding="utf-8")
+
+            def fake_builder(content, artifact: Path, preview: Path, *, template_path=None):
+                self.assertEqual(content["title"], "Portfolio Review")
+                template = Path("skills/powerpoint-deck-builder/GSWM_template.pptx")
+                shutil.copy2(template, artifact)
+                writer = PdfWriter()
+                writer.add_blank_page(width=960, height=540)
+                writer.add_blank_page(width=960, height=540)
+                with preview.open("wb") as stream:
+                    writer.write(stream)
+                return artifact, preview
+
+            runner = ReportRunner(
+                session_root=root / "sessions", powerpoint_builder=fake_builder
+            )
+            request = ReportRunRequest(
+                "powerpoint-deck-builder",
+                {"content": (source,)},
+                {"report_title": "Portfolio Review"},
+            )
+
+            prepared = runner.prepare(request)
+
+            self.assertEqual(prepared.artifact_path.suffix, ".pptx")
+            self.assertEqual(prepared.preview_path.suffix, ".pdf")
+            result = runner.finalize(prepared, root / "final")
+            self.assertEqual(result.output_path.name, "Portfolio Review.pptx")
+
     def test_prepares_and_finalizes_excel_workbook(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

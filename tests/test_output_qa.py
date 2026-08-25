@@ -47,13 +47,26 @@ class OutputInspectorTests(unittest.TestCase):
     def test_valid_presentation_is_approved(self) -> None:
         path = self.root / "report.pptx"
         presentation = Presentation()
-        presentation.slides.add_slide(presentation.slide_layouts[0])
+        slide = presentation.slides.add_slide(presentation.slide_layouts[0])
+        slide.shapes.title.text = "Portfolio Review"
+        slide.placeholders[1].text = "Prepared for client review"
         presentation.save(path)
 
         result = self.inspector.inspect(path)
 
         self.assertTrue(result.approved)
         self.assertEqual(result.page_or_sheet_count, 1)
+
+    def test_unfilled_presentation_placeholder_is_rejected(self) -> None:
+        path = self.root / "report.pptx"
+        presentation = Presentation()
+        presentation.slides.add_slide(presentation.slide_layouts[0])
+        presentation.save(path)
+
+        result = self.inspector.inspect(path)
+
+        self.assertFalse(result.approved)
+        self.assertTrue(any(issue.code == "empty_placeholder" for issue in result.issues))
 
     def test_missing_output_is_rejected(self) -> None:
         result = self.inspector.inspect(self.root / "missing.pdf")

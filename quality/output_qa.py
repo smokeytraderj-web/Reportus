@@ -103,6 +103,29 @@ class OutputInspector:
         blank = sum(1 for slide in presentation.slides if not slide.shapes)
         if blank:
             issues.append(QAIssue(QALevel.WARNING, "blank_slides", f"Presentation contains {blank} blank slide(s)."))
+        exact_prompts = {"slide number", "date", "footer", "paste chart here"}
+        for slide_number, slide in enumerate(presentation.slides, start=1):
+            for shape in slide.shapes:
+                if not getattr(shape, "has_text_frame", False):
+                    continue
+                text = shape.text.strip()
+                if getattr(shape, "is_placeholder", False) and not text:
+                    issues.append(
+                        QAIssue(
+                            QALevel.ERROR,
+                            "empty_placeholder",
+                            f"Slide {slide_number} contains an unfilled placeholder.",
+                        )
+                    )
+                normalized = text.casefold()
+                if normalized in exact_prompts or normalized.startswith("click to add"):
+                    issues.append(
+                        QAIssue(
+                            QALevel.ERROR,
+                            "placeholder_text",
+                            f"Slide {slide_number} contains unresolved placeholder text.",
+                        )
+                    )
         return len(presentation.slides), issues
 
     def _inspect_docx(self, path: Path) -> tuple[int, list[QAIssue]]:
