@@ -28,6 +28,12 @@ class WorkflowTests(unittest.TestCase):
             with self.subTest(workflow=workflow.skill_id):
                 self.assertEqual(len(ids), len(set(ids)))
 
+    def test_every_upload_declares_file_types(self) -> None:
+        for workflow in load_workflows():
+            for requirement in workflow.required_uploads + workflow.optional_uploads:
+                with self.subTest(workflow=workflow.skill_id, slot=requirement.requirement_id):
+                    self.assertTrue(requirement.accepted_extensions)
+
 
 if __name__ == "__main__":
     unittest.main()

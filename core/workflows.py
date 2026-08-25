@@ -16,6 +16,7 @@ class UploadRequirement:
     requirement_id: str
     label: str
     description: str
+    accepted_extensions: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +36,7 @@ def _requirements(items: list[dict[str, str]]) -> tuple[UploadRequirement, ...]:
             requirement_id=item["id"],
             label=item["label"],
             description=item["description"],
+            accepted_extensions=tuple(extension.lower() for extension in item["accepted_extensions"]),
         )
         for item in items
     )

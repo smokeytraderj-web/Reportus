@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from core.workflows import ReportWorkflow
 from security.privacy import PrivacyScanResult, PrivacyScanner
+from validation.inputs import InputValidator
 from ui.theme import DANGER, SUCCESS
 from ui.widgets import ReportCard, UploadBox
 
@@ -60,9 +61,15 @@ class IntakePage(QWidget):
     back_requested = Signal()
     review_ready = Signal(object, object, str)
 
-    def __init__(self, scanner: PrivacyScanner | None = None, parent=None):
+    def __init__(
+        self,
+        scanner: PrivacyScanner | None = None,
+        validator: InputValidator | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.scanner = scanner or PrivacyScanner()
+        self.validator = validator or InputValidator()
         self.workflow: ReportWorkflow | None = None
         self.upload_boxes: dict[str, UploadBox] = {}
         self.optional_checks: dict[str, QCheckBox] = {}
@@ -198,13 +205,18 @@ class IntakePage(QWidget):
             self._show_privacy_failure(result)
             return
 
-        self.status.setText("Privacy and file inspection passed.")
-        self.status.setStyleSheet(f"color: {SUCCESS};")
         selections = {
             slot_id: tuple(box.paths)
             for slot_id, box in self.upload_boxes.items()
             if box.paths
         }
+        validation = self.validator.validate(self.workflow, selections)
+        if not validation.approved:
+            self._show_error(" | ".join(issue.message for issue in validation.errors))
+            return
+
+        self.status.setText("Privacy and data-structure checks passed.")
+        self.status.setStyleSheet(f"color: {SUCCESS};")
         self.review_ready.emit(self.workflow, selections, self.custom_prompt.toPlainText().strip())
 
     def _show_error(self, message: str) -> None:
