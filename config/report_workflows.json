@@ -1,0 +1,52 @@
+{
+  "workflows": [
+    {
+      "skill_id": "client-deck-builder",
+      "title": "Client Deck",
+      "subtitle": "Build a complete client portfolio review.",
+      "required_uploads": [
+        {"id": "risk_snapshot", "label": "Risk snapshot", "description": "Risk score, allocation, range, and portfolio metrics."},
+        {"id": "attribution", "label": "Attribution report", "description": "Performance contribution and holding-level results."},
+        {"id": "market_report", "label": "Market report", "description": "Sector performance, commentary, and earnings outlook."}
+      ],
+      "optional_uploads": [
+        {"id": "rmd", "label": "RMD", "description": "Required minimum distribution section."},
+        {"id": "529", "label": "529 accounts", "description": "Education-account portfolio summary."},
+        {"id": "annuity", "label": "Annuity", "description": "Annuity or insurance review."}
+      ]
+    },
+    {
+      "skill_id": "template-pdf-report",
+      "title": "Excel to PDF",
+      "subtitle": "Rebuild a polished PDF from fresh spreadsheet data.",
+      "required_uploads": [
+        {"id": "spreadsheet", "label": "Spreadsheet data", "description": "The workbook or CSV containing the refreshed report data."},
+        {"id": "template", "label": "Reference PDF", "description": "The approved visual template or gold-standard report."}
+      ],
+      "optional_uploads": []
+    },
+    {
+      "skill_id": "excel-workbook-builder",
+      "title": "Excel Workbook",
+      "subtitle": "Create a clean, formatted financial workbook.",
+      "required_uploads": [
+        {"id": "source_data", "label": "Source data", "description": "Workbook, CSV, or supporting files used to build the output."}
+      ],
+      "optional_uploads": [
+        {"id": "style_reference", "label": "Style reference", "description": "Optional example workbook, PDF, or screenshot."}
+      ]
+    },
+    {
+      "skill_id": "powerpoint-deck-builder",
+      "title": "PowerPoint Deck",
+      "subtitle": "Create an editable branded presentation.",
+      "required_uploads": [
+        {"id": "content", "label": "Deck content", "description": "Source data, outline, or documents for the presentation."}
+      ],
+      "optional_uploads": [
+        {"id": "charts", "label": "Charts and images", "description": "Optional visual material for slides."},
+        {"id": "reference", "label": "Reference deck", "description": "Optional presentation to match or adapt."}
+      ]
+    }
+  ]
+}
