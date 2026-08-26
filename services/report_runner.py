@@ -34,6 +34,10 @@ from generators.excel_to_pdf import (
     StockReviewConfig,
     build_stock_review_pdf,
 )
+from generators.portfolio_pdf import (
+    build_portfolio_workbook_pdf,
+    is_portfolio_workbook,
+)
 from generators.powerpoint_content import (
     deck_content_schema,
     normalize_deck_payload,
@@ -95,6 +99,7 @@ class RevisionContext:
 
 
 PDFBuilder = Callable[[Path, Path, StockReviewConfig], Path]
+PortfolioPDFBuilder = Callable[..., Path]
 WorkbookBuilder = Callable[[tuple, HoldingsWorkbookConfig, Path], Path]
 PowerPointBuilder = Callable[..., tuple[Path, Path]]
 ClientDeckBuilder = Callable[[ClientDeckData, Path], Path]
@@ -190,6 +195,7 @@ class ReportRunner:
         *,
         session_root: Path | None = None,
         pdf_builder: PDFBuilder | None = None,
+        portfolio_pdf_builder: PortfolioPDFBuilder | None = None,
         workbook_builder: WorkbookBuilder | None = None,
         workbook_preview_builder: WorkbookBuilder | None = None,
         powerpoint_builder: PowerPointBuilder | None = None,
@@ -199,6 +205,7 @@ class ReportRunner:
     ):
         self.session_root = session_root
         self.pdf_builder = pdf_builder or build_stock_review_pdf
+        self.portfolio_pdf_builder = portfolio_pdf_builder or build_portfolio_workbook_pdf
         self.workbook_builder = workbook_builder or build_holdings_workbook
         self.workbook_preview_builder = workbook_preview_builder or build_holdings_snapshot
         self.powerpoint_builder = powerpoint_builder or build_powerpoint_deck
@@ -443,6 +450,50 @@ class ReportRunner:
             missing = [key.replace("_", " ") for key in required if not request.options.get(key, "").strip()]
             if missing:
                 raise ReportRunError("Missing report detail(s): " + ", ".join(missing))
+
+            if is_portfolio_workbook(workbook):
+                preview_pdf = session.preview / "report.pdf"
+                self.portfolio_pdf_builder(
+                    workbook,
+                    template,
+                    preview_pdf,
+                    client_name=request.options["client_name"].strip(),
+                    period_label=request.options["period_label"].strip(),
+                    report_title=request.options["report_title"].strip(),
+                    source_label=request.options["source_label"].strip(),
+                )
+                qa = OutputInspector().inspect(preview_pdf)
+                if not qa.approved:
+                    raise ReportRunError("The generated portfolio report failed integrity checks.")
+                filename = sanitize_filename(
+                    f"{request.options['client_name'].strip()} - "
+                    f"{request.options['report_title'].strip()}.pdf"
+                )
+                audit = ReportAudit.from_staged_inputs(
+                    report_type="Portfolio PDF",
+                    sections=(
+                        "Portfolio at a glance",
+                        "Target allocation",
+                        "Risk, assumptions and implementation",
+                        "Recent research checks",
+                        "Sources and data audit",
+                    ),
+                    staged=staged,
+                    slot_labels={
+                        "spreadsheet": "Portfolio data and source audit",
+                        "template": "Approved PDF visual reference",
+                        "custom": "Custom-section support",
+                    },
+                    citations=(
+                        AuditCitation("Target allocation", f"{workbook.name} · worksheet Portfolio"),
+                        AuditCitation("Recent research checks", f"{workbook.name} · worksheet Research & Assumptions"),
+                        AuditCitation("Sources and data audit", f"{workbook.name} · worksheet Sources"),
+                    ),
+                )
+                return PreparedReport(
+                    session, preview_pdf, preview_pdf, filename, qa.page_or_sheet_count, audit
+                )
+
             config = StockReviewConfig(
                 client_name=request.options["client_name"].strip(),
                 period_label=request.options["period_label"].strip(),
