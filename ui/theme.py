@@ -72,6 +72,18 @@ QLineEdit, QTextEdit {{
     padding: 9px;
 }}
 QLineEdit:focus, QTextEdit:focus {{ border: 1px solid {GOLD}; }}
+QTabWidget::pane {{ border: 0; background: {SURFACE}; }}
+QTabBar::tab {{
+    color: {MUTED};
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 8px 7px;
+    font-size: 11px;
+    font-weight: 600;
+}}
+QTabBar::tab:selected {{ color: {NAVY}; border-bottom: 2px solid {GOLD}; }}
+QScrollArea {{ background: {SURFACE}; border: 0; }}
 QCheckBox {{ spacing: 8px; }}
 QProgressBar {{
     background: #E8EBEF;

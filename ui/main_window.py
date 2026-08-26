@@ -44,6 +44,29 @@ class GenerationWorker(QThread):
             self.failed.emit(str(exc) or "Report generation failed.")
 
 
+class RevisionWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def __init__(
+        self,
+        runner: ReportRunner,
+        prepared: PreparedReport,
+        prompt: str,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.runner = runner
+        self.prepared = prepared
+        self.prompt = prompt
+
+    def run(self) -> None:
+        try:
+            self.completed.emit(self.runner.revise(self.prepared, self.prompt))
+        except Exception as exc:
+            self.failed.emit(str(exc) or "Revision failed.")
+
+
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -55,6 +78,7 @@ class MainWindow(QMainWindow):
         self.prepared_report: PreparedReport | None = None
         self.runner = ReportRunner()
         self.worker: GenerationWorker | None = None
+        self.revision_worker: RevisionWorker | None = None
         self.progress: QProgressDialog | None = None
         self.preferences = QSettings("Reportus", "Reportus")
 
@@ -160,7 +184,12 @@ class MainWindow(QMainWindow):
         if self.progress is not None:
             self.progress.close()
         self.prepared_report = result
-        self.preview.set_report(result.preview_path, result.page_or_sheet_count)
+        if result.audit is None:
+            QMessageBox.warning(self, "Report not generated", "Review evidence is unavailable.")
+            self.runner.cancel(result)
+            self.prepared_report = None
+            return
+        self.preview.set_report(result.preview_path, result.page_or_sheet_count, result.audit)
         self.stack.setCurrentWidget(self.preview)
 
     def _generation_failed(self, message: str) -> None:
@@ -175,7 +204,7 @@ class MainWindow(QMainWindow):
         self.progress = None
 
     def finalize_report(self) -> None:
-        if self.prepared_report is None:
+        if self.prepared_report is None or self.revision_worker is not None:
             return
         output_directory = self._output_directory()
         if output_directory is None:
@@ -191,6 +220,8 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.home)
 
     def cancel_prepared_report(self) -> None:
+        if self.revision_worker is not None:
+            return
         if self.prepared_report is not None:
             self.runner.cancel(self.prepared_report)
         self.prepared_report = None
@@ -198,18 +229,42 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.home)
 
     def request_revision(self, prompt: str) -> None:
-        QMessageBox.information(
-            self,
-            "Revision queued for the next build slice",
-            "The preview and revision workspace are ready. Revision execution is not connected yet.",
+        if self.prepared_report is None or self.revision_worker is not None:
+            return
+        self.preview.set_revision_busy(True)
+        self.revision_worker = RevisionWorker(
+            self.runner, self.prepared_report, prompt, self
         )
+        self.revision_worker.completed.connect(self._revision_completed)
+        self.revision_worker.failed.connect(self._revision_failed)
+        self.revision_worker.finished.connect(self._revision_finished)
+        self.revision_worker.start()
+
+    def _revision_completed(self, result: PreparedReport) -> None:
+        self.prepared_report = result
+        if result.audit is None:
+            self._revision_failed("Review evidence is unavailable.")
+            return
+        self.preview.set_report(result.preview_path, result.page_or_sheet_count, result.audit)
+
+    def _revision_failed(self, message: str) -> None:
+        QMessageBox.warning(self, "Revision not applied", message)
+
+    def _revision_finished(self) -> None:
+        self.preview.set_revision_busy(False)
+        if self.revision_worker is not None:
+            self.revision_worker.deleteLater()
+        self.revision_worker = None
 
     def closeEvent(self, event) -> None:
-        if self.worker is not None and self.worker.isRunning():
+        if (
+            (self.worker is not None and self.worker.isRunning())
+            or (self.revision_worker is not None and self.revision_worker.isRunning())
+        ):
             QMessageBox.information(
                 self,
-                "Report generation in progress",
-                "Wait for generation to finish, then finalize or cancel the report.",
+                "Report work in progress",
+                "Wait for the current report operation to finish, then finalize or cancel.",
             )
             event.ignore()
             return

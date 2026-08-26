@@ -1,10 +1,11 @@
 """Environment, model, and system configuration."""
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 
 
 @dataclass(frozen=True, slots=True)

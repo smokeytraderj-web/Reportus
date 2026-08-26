@@ -8,6 +8,18 @@ from security.privacy import PrivacyScanner, ProhibitedCategory
 
 
 class PrivacyScannerTests(unittest.TestCase):
+    def test_typed_revision_uses_same_privacy_policy(self) -> None:
+        scanner = PrivacyScanner()
+
+        approved = scanner.scan_text("Shorten the second bullet on the risk slide.")
+        rejected = scanner.scan_text("Send it to analyst@example.com")
+
+        self.assertTrue(approved.approved)
+        self.assertFalse(rejected.approved)
+        self.assertEqual(
+            rejected.findings[0].category, ProhibitedCategory.EMAIL_ADDRESS
+        )
+
     def setUp(self) -> None:
         self.scanner = PrivacyScanner()
         self.temp_dir = tempfile.TemporaryDirectory()

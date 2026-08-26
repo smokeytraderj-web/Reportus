@@ -139,6 +139,105 @@ class ReportRunnerTests(unittest.TestCase):
 
             self.assertTrue(prepared.artifact_path.is_file())
             self.assertEqual(len(provider.requests), 1)
+            self.assertEqual(prepared.audit.report_type, "PowerPoint Deck")
+            self.assertEqual(prepared.audit.sections, ("Returns remained positive",))
+            runner.cancel(prepared)
+
+    def test_applies_one_grounded_powerpoint_revision_without_version_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "content.json"
+            source.write_text(json.dumps({
+                "slides": [{
+                    "title": "Portfolio positioning",
+                    "bullets": ["Risk remains within the agreed range."],
+                }]
+            }), encoding="utf-8")
+            provider = FixtureProvider([{
+                "slides": [{
+                    "title": "Positioning remains balanced",
+                    "bullets": ["Risk remains within the agreed range."],
+                    "footer_right": "Source: Uploaded content",
+                }]
+            }])
+            builds: list[dict[str, object]] = []
+
+            def fake_builder(content, artifact: Path, preview: Path, *, template_path=None):
+                builds.append(content)
+                shutil.copy2(Path("skills/powerpoint-deck-builder/GSWM_template.pptx"), artifact)
+                writer = PdfWriter()
+                writer.add_blank_page(width=960, height=540)
+                writer.add_blank_page(width=960, height=540)
+                with preview.open("wb") as stream:
+                    writer.write(stream)
+                return artifact, preview
+
+            runner = ReportRunner(
+                session_root=root / "sessions",
+                powerpoint_builder=fake_builder,
+                provider=provider,
+            )
+            prepared = runner.prepare(ReportRunRequest(
+                "powerpoint-deck-builder",
+                {"content": (source,)},
+                {"report_title": "Portfolio Review"},
+            ))
+
+            revised = runner.revise(prepared, "Make the first slide title more concise.")
+
+            self.assertIs(revised, prepared)
+            self.assertEqual(len(builds), 2)
+            self.assertEqual(
+                revised.audit.sections, ("Positioning remains balanced",)
+            )
+            self.assertEqual(
+                list(revised.session.working.glob("revised-report.*")), []
+            )
+            self.assertEqual(len(provider.requests), 1)
+            runner.cancel(revised)
+
+    def test_rejects_numeric_changes_requested_through_revision_chat(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "content.json"
+            source.write_text(json.dumps({
+                "slides": [{
+                    "title": "Portfolio return",
+                    "bullets": ["Portfolio return was 5.20%."],
+                }]
+            }), encoding="utf-8")
+            provider = FixtureProvider([{
+                "slides": [{
+                    "title": "Portfolio return",
+                    "bullets": ["Portfolio return was 7.10%."],
+                    "footer_right": "Source: Uploaded content",
+                }]
+            }])
+
+            def fake_builder(content, artifact: Path, preview: Path, *, template_path=None):
+                shutil.copy2(Path("skills/powerpoint-deck-builder/GSWM_template.pptx"), artifact)
+                writer = PdfWriter()
+                writer.add_blank_page(width=960, height=540)
+                writer.add_blank_page(width=960, height=540)
+                with preview.open("wb") as stream:
+                    writer.write(stream)
+                return artifact, preview
+
+            runner = ReportRunner(
+                session_root=root / "sessions",
+                powerpoint_builder=fake_builder,
+                provider=provider,
+            )
+            prepared = runner.prepare(ReportRunRequest(
+                "powerpoint-deck-builder",
+                {"content": (source,)},
+                {"report_title": "Portfolio Review"},
+            ))
+
+            with self.assertRaisesRegex(Exception, "cannot change report numbers"):
+                runner.revise(prepared, "Change the return shown on the slide.")
+
+            self.assertTrue(prepared.artifact_path.is_file())
             runner.cancel(prepared)
 
     def test_prepares_and_finalizes_powerpoint_json_package(self) -> None:
@@ -198,6 +297,8 @@ class ReportRunnerTests(unittest.TestCase):
             self.assertEqual(prepared.preview_path.suffix, ".pdf")
             self.assertTrue(prepared.artifact_path.is_file())
             self.assertTrue(prepared.preview_path.is_file())
+            self.assertEqual(prepared.audit.report_type, "Excel Workbook")
+            self.assertEqual(prepared.audit.sources[0].name, "holdings.csv")
             result = runner.finalize(prepared, root / "final")
             self.assertEqual(result.output_path.name, "Holdings Summary.xlsx")
             self.assertTrue(result.output_path.is_file())
@@ -232,6 +333,8 @@ class ReportRunnerTests(unittest.TestCase):
             result = runner.finalize(prepared, root / "final")
             self.assertTrue(result.output_path.is_file())
             self.assertFalse(prepared.session.path.exists())
+            self.assertIsNone(prepared.audit)
+            self.assertIsNone(prepared.revision_context)
 
     def test_retains_only_verified_final_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

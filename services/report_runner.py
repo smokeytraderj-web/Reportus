@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import shutil
 import datetime as dt
+import json
+import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -11,6 +14,7 @@ from typing import Callable
 from openpyxl import load_workbook
 from pypdf import PdfReader
 
+from core.audit import AuditCitation, ReportAudit
 from core.session import ReportSession
 from core.structured_agent import StructuredAgent
 from extraction.content import ContentExtractor
@@ -35,7 +39,7 @@ from generators.powerpoint_content import (
     normalize_deck_payload,
     validate_deck_content,
 )
-from providers.base import StructuredProvider, StructuredRequest
+from providers.base import SourceFragment, StructuredProvider, StructuredRequest
 from providers.registry import provider_from_environment
 from quality.output_qa import OutputInspector
 from quality.grounding import verify_numeric_grounding
@@ -63,13 +67,31 @@ class GenerationResult:
     page_or_sheet_count: int | None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class PreparedReport:
     session: ReportSession
     artifact_path: Path
     preview_path: Path
     suggested_filename: str
     page_or_sheet_count: int | None
+    audit: ReportAudit | None
+    revision_context: "RevisionContext | None" = None
+
+    def clear_temporary_context(self) -> None:
+        """Forget review evidence and editable content after the session ends."""
+
+        self.audit = None
+        self.revision_context = None
+
+
+@dataclass(slots=True)
+class RevisionContext:
+    """Only the current editable state; previous report versions are never retained."""
+
+    skill_id: str
+    content: dict[str, object]
+    source_paths: tuple[Path, ...]
+    template_path: Path | None
 
 
 PDFBuilder = Callable[[Path, Path, StockReviewConfig], Path]
@@ -77,6 +99,26 @@ WorkbookBuilder = Callable[[tuple, HoldingsWorkbookConfig, Path], Path]
 PowerPointBuilder = Callable[..., tuple[Path, Path]]
 ClientDeckBuilder = Callable[[ClientDeckData, Path], Path]
 PresentationConverter = Callable[[Path, Path], Path]
+
+
+_NUMERIC_TOKEN = re.compile(r"(?<![A-Za-z])[-+]?\d[\d,.]*(?:%|x)?", re.IGNORECASE)
+
+
+def _numeric_signature(value: object, path: str = "report") -> dict[str, tuple[str, ...]]:
+    """Keep every displayed number anchored to the same structured field."""
+
+    if isinstance(value, dict):
+        result: dict[str, tuple[str, ...]] = {}
+        for key, item in value.items():
+            result.update(_numeric_signature(item, f"{path}.{key}"))
+        return result
+    if isinstance(value, list):
+        result = {}
+        for index, item in enumerate(value):
+            result.update(_numeric_signature(item, f"{path}[{index}]"))
+        return result
+    tokens = tuple(_NUMERIC_TOKEN.findall(str(value)))
+    return {path: tokens} if tokens else {}
 
 
 def _single_file(selections: dict[str, tuple[Path, ...]], slot: str) -> Path:
@@ -235,8 +277,38 @@ class ReportRunner:
                 filename = sanitize_filename(
                     f"{client_slug}_{report_date.isoformat()}_PortfolioReview.pdf"
                 )
+                section_names = (
+                    "Overall Asset Allocation",
+                    "Risk Snapshot",
+                    "Sector YTD Performance",
+                    "Equity Sector Exposure",
+                    "Attribution Report",
+                    "S&P 500 Earnings Expectations",
+                ) + tuple(
+                    {"rmd": "RMD Report", "529": "Portfolio Summary - 529 Accounts", "annuity": "Annuity Review"}[key]
+                    for key in ("rmd", "529", "annuity")
+                    if key in deck_data.optional_sections
+                )
+                audit = ReportAudit.from_staged_inputs(
+                    report_type="Client Deck",
+                    sections=section_names,
+                    staged=staged,
+                    slot_labels={
+                        "risk_snapshot": "Allocation and risk data",
+                        "attribution": "Performance attribution",
+                        "market_report": "Market and earnings data",
+                        "rmd": "RMD supporting data",
+                        "529": "529 supporting data",
+                        "annuity": "Annuity supporting data",
+                        "custom": "Custom-section support",
+                    },
+                    citations=tuple(
+                        AuditCitation(section.replace("_", " ").title(), locator)
+                        for section, locator in deck_data.sources.items()
+                    ),
+                )
                 return PreparedReport(
-                    session, preview, preview, filename, preview_qa.page_or_sheet_count
+                    session, preview, preview, filename, preview_qa.page_or_sheet_count, audit
                 )
 
             if request.skill_id == "powerpoint-deck-builder":
@@ -291,12 +363,41 @@ class ReportRunner:
                     or artifact_qa.page_or_sheet_count != preview_qa.page_or_sheet_count
                 ):
                     raise ReportRunError("The presentation or its preview failed integrity checks.")
+                audit = ReportAudit.from_staged_inputs(
+                    report_type="PowerPoint Deck",
+                    sections=tuple(
+                        str(slide.get("title", f"Slide {number}"))
+                        for number, slide in enumerate(content["slides"], start=1)
+                    ),
+                    staged=staged,
+                    slot_labels={
+                        "content": "Presentation content",
+                        "charts": "Chart or image",
+                        "reference": "PowerPoint reference",
+                        "custom": "Custom-section support",
+                    },
+                    citations=tuple(
+                        AuditCitation(
+                            str(slide.get("title", f"Slide {number}")),
+                            str(slide["footer_right"]),
+                        )
+                        for number, slide in enumerate(content["slides"], start=1)
+                        if slide.get("footer_right")
+                    ),
+                )
                 return PreparedReport(
                     session,
                     artifact,
                     preview,
                     sanitize_filename(f"{report_title}.pptx"),
                     artifact_qa.page_or_sheet_count,
+                    audit,
+                    RevisionContext(
+                        "powerpoint-deck-builder",
+                        content,
+                        tuple(sources),
+                        template,
+                    ),
                 )
 
             if request.skill_id == "excel-workbook-builder":
@@ -318,8 +419,18 @@ class ReportRunner:
                 if not artifact_qa.approved or not preview_qa.approved:
                     raise ReportRunError("The generated workbook or preview failed integrity checks.")
                 filename = sanitize_filename(f"{report_title}.xlsx")
+                audit = ReportAudit.from_staged_inputs(
+                    report_type="Excel Workbook",
+                    sections=(workbook_config.sheet_name,),
+                    staged=staged,
+                    slot_labels={
+                        "source_data": "Workbook source data",
+                        "style_reference": "Style reference",
+                        "custom": "Custom-section support",
+                    },
+                )
                 return PreparedReport(
-                    session, artifact, preview, filename, artifact_qa.page_or_sheet_count
+                    session, artifact, preview, filename, artifact_qa.page_or_sheet_count, audit
                 )
 
             workbook = _single_file(staged, "spreadsheet")
@@ -344,8 +455,22 @@ class ReportRunner:
                 raise ReportRunError("The generated report failed final integrity checks.")
 
             filename = sanitize_filename(f"{config.client_name} - {config.report_title}.pdf")
+            audit = ReportAudit.from_staged_inputs(
+                report_type="Excel to PDF",
+                sections=tuple(item.theme for item in config.reviews),
+                staged=staged,
+                slot_labels={
+                    "spreadsheet": "Report data",
+                    "template": "Approved PDF layout",
+                    "custom": "Custom-section support",
+                },
+                citations=tuple(
+                    AuditCitation(item.theme, f"{workbook.name} · worksheet {item.sheet_name}")
+                    for item in config.reviews
+                ),
+            )
             return PreparedReport(
-                session, preview_pdf, preview_pdf, filename, qa.page_or_sheet_count
+                session, preview_pdf, preview_pdf, filename, qa.page_or_sheet_count, audit
             )
         except Exception:
             session.cleanup()
@@ -365,10 +490,102 @@ class ReportRunner:
             final_path.unlink(missing_ok=True)
             raise ReportRunError("The saved report failed final integrity checks.")
         prepared.session.cleanup()
+        prepared.clear_temporary_context()
         return GenerationResult(final_path, final_qa.page_or_sheet_count)
 
     def cancel(self, prepared: PreparedReport) -> None:
         prepared.session.cleanup()
+        prepared.clear_temporary_context()
+
+    def revise(self, prepared: PreparedReport, prompt: str) -> PreparedReport:
+        """Replace one working presentation slide after privacy and grounding checks."""
+
+        if prepared.session.closed or not prepared.session.path.is_dir():
+            raise ReportRunError("The report working session is no longer available.")
+        privacy = PrivacyScanner().scan_text(prompt, source="revision request")
+        if not privacy.approved:
+            categories = sorted({finding.category.value for finding in privacy.findings})
+            if categories:
+                raise ReportRunError(
+                    "Revision privacy check failed: remove " + ", ".join(categories) + "."
+                )
+            raise ReportRunError("Enter one inspectable revision request.")
+        context = prepared.revision_context
+        if context is None or context.skill_id != "powerpoint-deck-builder":
+            raise ReportRunError(
+                "Chat revisions are currently available for PowerPoint Decks. "
+                "For this report type, cancel and upload the corrected source data."
+            )
+        if prepared.audit is None:
+            raise ReportRunError("The temporary Data & Sources audit is unavailable.")
+        if not all("bullets" in slide for slide in context.content.get("slides", [])):
+            raise ReportRunError(
+                "Chat revisions currently support text-only PowerPoint slides. "
+                "Edit the structured JSON source for table or chart slides."
+            )
+
+        fragments = ContentExtractor().extract(list(context.source_paths))
+        current_fragment = SourceFragment(
+            "current-report.json",
+            "current approved working draft",
+            json.dumps(context.content, indent=2, ensure_ascii=False),
+        )
+        report_title = str(context.content["title"])
+        request = StructuredRequest(
+            task_name="powerpoint-text-revision",
+            instructions=(
+                "Apply exactly one requested editorial change to exactly one slide in the current report. "
+                "Do not add, remove, or reorder slides. Do not change any number, date, ticker, rating, "
+                "source footer, or report title. Preserve every unchanged slide byte-for-byte in meaning "
+                "and wording. The user's request is: " + json.dumps(prompt)
+            ),
+            json_schema=deck_content_schema(),
+            sources=fragments + (current_fragment,),
+            privacy_approved=True,
+        )
+        revised = StructuredAgent(self.provider).run(
+            request,
+            lambda payload: self._validated_powerpoint_revision(
+                payload, context.content, fragments, report_title
+            ),
+        )
+
+        candidate_artifact = prepared.session.working / "revised-report.pptx"
+        candidate_preview = prepared.session.preview / "revised-report.pdf"
+        try:
+            self.powerpoint_builder(
+                revised,
+                candidate_artifact,
+                candidate_preview,
+                template_path=context.template_path,
+            )
+            artifact_qa = OutputInspector().inspect(candidate_artifact)
+            preview_qa = OutputInspector().inspect(candidate_preview)
+            if (
+                not artifact_qa.approved
+                or not preview_qa.approved
+                or artifact_qa.page_or_sheet_count != preview_qa.page_or_sheet_count
+            ):
+                raise ReportRunError("The revised presentation failed integrity checks.")
+            os.replace(candidate_artifact, prepared.artifact_path)
+            os.replace(candidate_preview, prepared.preview_path)
+        finally:
+            candidate_artifact.unlink(missing_ok=True)
+            candidate_preview.unlink(missing_ok=True)
+
+        context.content = revised
+        prepared.page_or_sheet_count = artifact_qa.page_or_sheet_count
+        prepared.audit = ReportAudit(
+            report_type=prepared.audit.report_type,
+            sections=tuple(str(slide["title"]) for slide in revised["slides"]),
+            sources=prepared.audit.sources,
+            citations=tuple(
+                AuditCitation(str(slide["title"]), str(slide["footer_right"]))
+                for slide in revised["slides"]
+                if slide.get("footer_right")
+            ),
+        )
+        return prepared
 
     @staticmethod
     def _validated_client_deck(payload: dict[str, object], fragments, options) -> ClientDeckData:
@@ -394,6 +611,31 @@ class ReportRunner:
         return normalize_deck_payload(
             payload, report_title=report_title, image_paths=images
         )
+
+    @staticmethod
+    def _validated_powerpoint_revision(payload, current, fragments, report_title):
+        revised = normalize_deck_payload(payload, report_title=report_title)
+        old_slides = current["slides"]
+        new_slides = revised["slides"]
+        if len(old_slides) != len(new_slides):
+            raise ReportRunError("A revision cannot add or remove slides.")
+        changed = [
+            index for index, (old, new) in enumerate(zip(old_slides, new_slides))
+            if old != new
+        ]
+        if len(changed) != 1:
+            raise ReportRunError("A revision must change exactly one slide.")
+        for old, new in zip(old_slides, new_slides):
+            if old.get("footer_right") != new.get("footer_right"):
+                raise ReportRunError("A revision cannot change source citations.")
+        if _numeric_signature(current) != _numeric_signature(revised):
+            raise ReportRunError("A revision cannot change report numbers through chat.")
+        verify_numeric_grounding(
+            revised,
+            fragments,
+            excluded_keys=frozenset({"footer_right", "footer_left", "header_right"}),
+        )
+        return revised
 
     def run(self, request: ReportRunRequest, output_directory: Path) -> GenerationResult:
         """Non-UI convenience method that prepares and immediately finalizes."""

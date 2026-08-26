@@ -10,8 +10,9 @@ A minimal Windows desktop application for building polished financial reports fr
 - PowerPoint Deck generation from a strict JSON content package through the supplied Windows PowerPoint/GSWM-template workflow.
 - Provider-neutral structured synthesis with a disabled-by-default, free local Ollama option and numeric source-grounding checks.
 - Client Deck PPTX/PDF generation engine with synthetic end-to-end coverage.
-- Isolated report sessions, embedded PDF review, explicit finalization, automatic filename versioning, and verified cleanup.
-- General document-to-deck synthesis, custom sections, external research, and revision execution remain in development.
+- Isolated report sessions, embedded PDF review, a temporary Data & Sources audit, explicit finalization, automatic filename versioning, and verified cleanup.
+- One-change, text-only PowerPoint revisions with privacy, citation, numeric-grounding, and atomic-replacement guards.
+- General document-to-deck synthesis is connected; custom sections, external research, and revisions for deterministic Excel reports remain in development.
 
 ## Development
 
@@ -31,3 +32,15 @@ Run the non-UI test suite with:
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+## Windows installer build
+
+Builds are intentionally created on Windows so the packaged Qt and PowerPoint integrations match the deployment platform. Install Python 3 and Inno Setup 6, then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+```
+
+The script creates an isolated build environment, runs the tests, builds the fast-starting onedir application, runs a packaged-resource smoke test, and writes the installer to `dist\installer`. Use `-SkipInstaller` when only the unpackaged application folder is needed.
+
+The repository also includes a manually triggered **Windows Installer** GitHub Actions workflow. It builds on a clean Windows runner and provides the installer plus its SHA-256 checksum as a private workflow artifact.

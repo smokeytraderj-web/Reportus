@@ -113,6 +113,14 @@ def _visible_xml_text(raw_xml: bytes) -> str:
 class PrivacyScanner:
     """Inspect supported uploads locally and reject a batch on any uncertainty."""
 
+    def scan_text(self, text: str, *, source: str = "typed request") -> PrivacyScanResult:
+        """Apply the same fail-closed policy to text entered inside Reportus."""
+
+        if not text.strip():
+            return PrivacyScanResult(False, errors=("No text was provided.",))
+        findings = tuple(self._scan_text(source, source, text))
+        return PrivacyScanResult(approved=not findings, findings=findings)
+
     def scan_files(self, paths: list[Path] | tuple[Path, ...]) -> PrivacyScanResult:
         findings: list[PrivacyFinding] = []
         errors: list[str] = []

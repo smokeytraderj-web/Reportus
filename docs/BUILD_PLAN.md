@@ -50,6 +50,8 @@ Exit condition: each menu function generates its declared deliverable from clean
 
 Exit condition: finalized outputs open correctly, meet their skill-defined QA rules, and require only minor manual adjustment.
 
+Current status: embedded preview, ephemeral Data & Sources evidence, finalization, versioning, cleanup, and guarded one-slide PowerPoint text revisions are connected. Excel-report chat revisions remain source-driven by design until a safe structured editing contract is added.
+
 ## Phase 6 - Windows Packaging
 
 - Package Reportus for a standard Windows business laptop.
@@ -57,6 +59,8 @@ Exit condition: finalized outputs open correctly, meet their skill-defined QA ru
 - Test clean install, upgrade, generation, cancellation, crash cleanup, and uninstall.
 
 Exit condition: Reportus installs and runs without a development environment.
+
+Current status: the versioned PyInstaller onedir build, packaged-resource smoke test, per-user Inno Setup installer, shortcuts, and uninstaller are scaffolded. A clean Windows-machine build and install test is still required.
 
 ## Deferred
 
@@ -66,4 +70,3 @@ Exit condition: Reportus installs and runs without a development environment.
 - Automatic updates
 - Multi-device synchronization
 - Commercial or external-firm use
-

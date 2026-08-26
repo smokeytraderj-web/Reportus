@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -27,6 +28,7 @@ except ImportError:  # pragma: no cover - depends on the packaged Qt build
     QPdfDocument = None
     QPdfView = None
 
+from core.audit import ReportAudit
 from core.workflows import ReportWorkflow
 from security.privacy import PrivacyScanResult, PrivacyScanner
 from validation.inputs import InputValidator
@@ -400,8 +402,11 @@ class PreviewPage(QWidget):
         rail_layout = QVBoxLayout(rail)
         rail_layout.setContentsMargins(18, 18, 18, 18)
         rail_layout.setSpacing(10)
-        rail_title = QLabel("Revision")
-        rail_title.setObjectName("SectionTitle")
+        rail_tabs = QTabWidget()
+        revision_tab = QWidget()
+        revision_layout = QVBoxLayout(revision_tab)
+        revision_layout.setContentsMargins(4, 10, 4, 4)
+        revision_layout.setSpacing(10)
         rail_hint = QLabel("Describe one change at a time.")
         rail_hint.setObjectName("Muted")
         rail_hint.setWordWrap(True)
@@ -411,32 +416,56 @@ class PreviewPage(QWidget):
         self.apply_revision = QPushButton("Apply revision")
         self.apply_revision.setObjectName("SecondaryButton")
         self.apply_revision.clicked.connect(self._request_revision)
-        rail_layout.addWidget(rail_title)
-        rail_layout.addWidget(rail_hint)
-        rail_layout.addWidget(self.revision)
-        rail_layout.addWidget(self.apply_revision)
-        rail_layout.addStretch()
+        revision_layout.addWidget(rail_hint)
+        revision_layout.addWidget(self.revision)
+        revision_layout.addWidget(self.apply_revision)
+        revision_layout.addStretch()
+        rail_tabs.addTab(revision_tab, "Revision")
+
+        audit_tab = QWidget()
+        audit_layout = QVBoxLayout(audit_tab)
+        audit_layout.setContentsMargins(4, 10, 4, 4)
+        audit_layout.setSpacing(8)
+        audit_intro = QLabel("Temporary build evidence. Not included in the final report.")
+        audit_intro.setObjectName("Muted")
+        audit_intro.setWordWrap(True)
+        self.audit_text = QLabel()
+        self.audit_text.setObjectName("Muted")
+        self.audit_text.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.audit_text.setTextFormat(Qt.TextFormat.RichText)
+        self.audit_text.setWordWrap(True)
+        audit_scroll = QScrollArea()
+        audit_scroll.setWidgetResizable(True)
+        audit_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        audit_scroll.setWidget(self.audit_text)
+        audit_layout.addWidget(audit_intro)
+        audit_layout.addWidget(audit_scroll, 1)
+        rail_tabs.addTab(audit_tab, "Data & Sources")
+        rail_layout.addWidget(rail_tabs, 1)
         splitter.addWidget(rail)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
         root.addWidget(splitter, 1)
 
         actions = QHBoxLayout()
-        cancel = QPushButton("Cancel report")
-        cancel.setObjectName("SecondaryButton")
-        cancel.clicked.connect(self.cancel_requested)
-        finalize = QPushButton("Finalize Report")
-        finalize.setObjectName("PrimaryButton")
-        finalize.clicked.connect(self.finalize_requested)
-        actions.addWidget(cancel)
+        self.cancel_button = QPushButton("Cancel report")
+        self.cancel_button.setObjectName("SecondaryButton")
+        self.cancel_button.clicked.connect(self.cancel_requested)
+        self.finalize_button = QPushButton("Finalize Report")
+        self.finalize_button.setObjectName("PrimaryButton")
+        self.finalize_button.clicked.connect(self.finalize_requested)
+        actions.addWidget(self.cancel_button)
         actions.addStretch()
-        actions.addWidget(finalize)
+        actions.addWidget(self.finalize_button)
         root.addLayout(actions)
 
-    def set_report(self, path: Path, page_count: int | None) -> None:
+    def set_report(
+        self, path: Path, page_count: int | None, audit: ReportAudit
+    ) -> None:
         count = f" · {page_count} page(s)" if page_count else ""
         self.status.setText(f"Prepared locally{count} · not finalized")
         self.revision.clear()
+        self._set_audit(audit)
         if QPdfDocument is not None and QPdfView is not None:
             if self.document is not None:
                 self.document.close()
@@ -445,7 +474,32 @@ class PreviewPage(QWidget):
             self.document.load(str(path))
             self.viewer.setDocument(self.document)
 
+    def _set_audit(self, audit: ReportAudit) -> None:
+        import html
+
+        lines = [f"<b>{html.escape(audit.report_type)}</b>", "<br><b>Sections</b>"]
+        lines.extend(f"<br>• {html.escape(section)}" for section in audit.sections)
+        lines.append("<br><br><b>Approved inputs</b>")
+        lines.extend(
+            f"<br>• {html.escape(source.name)}<br>&nbsp;&nbsp;{html.escape(source.role)}"
+            for source in audit.sources
+        )
+        if audit.citations:
+            lines.append("<br><br><b>Section citations</b>")
+            lines.extend(
+                f"<br>• {html.escape(item.section)}<br>&nbsp;&nbsp;{html.escape(item.locator)}"
+                for item in audit.citations
+            )
+        self.audit_text.setText("".join(lines))
+
     def _request_revision(self) -> None:
         prompt = self.revision.toPlainText().strip()
         if prompt:
             self.revision_requested.emit(prompt)
+
+    def set_revision_busy(self, busy: bool) -> None:
+        self.revision.setEnabled(not busy)
+        self.apply_revision.setEnabled(not busy)
+        self.cancel_button.setEnabled(not busy)
+        self.finalize_button.setEnabled(not busy)
+        self.apply_revision.setText("Applying…" if busy else "Apply revision")

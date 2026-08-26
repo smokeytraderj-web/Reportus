@@ -27,6 +27,7 @@ reports/generated/
 build/
 dist/
 *.spec
+!packaging/windows/Reportus.spec
 
 # Editors and operating systems
 .idea/
