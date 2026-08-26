@@ -47,6 +47,16 @@ class ReportRunnerTests(unittest.TestCase):
                 path = root / name
                 path.write_text(text, encoding="utf-8")
                 sources.append(path)
+            holdings = root / "holdings.xlsx"
+            holdings_workbook = Workbook()
+            holdings_sheet = holdings_workbook.active
+            holdings_sheet.title = "Holdings"
+            holdings_sheet.append(["Symbol", "Holding", "Asset Class", "Sector", "Value", "Weight"])
+            holdings_sheet.append(["AAA", "Synthetic Technology Fund", "Equity", "Technology", 300000, .30])
+            holdings_sheet.append(["AAB", "Synthetic Energy Fund", "Equity", "Energy", 40000, .04])
+            holdings_sheet.append(["AAC", "Synthetic Diversified Fund", "Equity", "Other", 260000, .26])
+            holdings_sheet.append(["BBB", "Synthetic Bond Fund", "Fixed Income", "Fixed Income", 400000, .40])
+            holdings_workbook.save(holdings)
             provider = FixtureProvider([{
                 "allocation": [{"label": "Equity", "value": 600000}, {"label": "Fixed Income", "value": 400000}],
                 "risk_metrics": {
@@ -64,8 +74,8 @@ class ReportRunnerTests(unittest.TestCase):
                 "earnings_years": ["2025", "2026E"], "earnings_values": [300, 380],
                 "earnings_notes": ["Estimates remain positive."], "optional_sections": {},
                 "sources": {
-                    "allocation": "risk.csv rows 2-3", "risk": "risk.csv rows 2-3",
-                    "sector_performance": "market.csv rows 2-3", "sector_exposure": "risk.csv",
+                    "allocation": "holdings.xlsx Holdings rows 2-5", "risk": "risk.csv rows 2-3",
+                    "sector_performance": "market.csv rows 2-3", "sector_exposure": "holdings.xlsx Holdings rows 2-5",
                     "attribution": "attribution.csv rows 2-3", "earnings": "market.csv",
                 },
             }])
@@ -88,6 +98,7 @@ class ReportRunnerTests(unittest.TestCase):
                 "client-deck-builder",
                 {
                     "risk_snapshot": (sources[0],),
+                    "holdings": (holdings,),
                     "attribution": (sources[1],),
                     "market_report": (sources[2],),
                 },
@@ -101,6 +112,7 @@ class ReportRunnerTests(unittest.TestCase):
 
             self.assertEqual(prepared.preview_path.suffix, ".pdf")
             self.assertEqual(prepared.page_or_sheet_count, 8)
+            self.assertIn("Use the Client 360 holdings workbook", provider.requests[0].instructions)
             result = runner.finalize(prepared, root / "final")
             self.assertEqual(
                 result.output_path.name,

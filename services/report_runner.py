@@ -285,6 +285,10 @@ class ReportRunner:
                     instructions=(
                         "Map the approved portfolio-review sources into the Client Deck JSON contract. "
                         "Copy values exactly; do not calculate missing fields or infer investment conclusions. "
+                        "Use the Client 360 holdings workbook for overall allocation and portfolio sector "
+                        "exposure. Use the J.P. Morgan attribution report for contributors and detractors. "
+                        "Use the Riskalyze source for risk metrics, and the market report for sector "
+                        "performance and earnings expectations. "
                         "For risk_metrics, include Portfolio total, Risk, Historical loss, Historical loss %, "
                         "Historical gain, Historical gain %, Annual dividend, Max drawdown, Annual range midpoint, "
                         "Expense ratio, and Portfolio costs when those values are shown. "
@@ -337,6 +341,7 @@ class ReportRunner:
                     staged=staged,
                     slot_labels={
                         "risk_snapshot": "Allocation and risk data",
+                        "holdings": "Current holdings and allocation",
                         "attribution": "Performance attribution",
                         "market_report": "Market and earnings data",
                         "rmd": "RMD supporting data",

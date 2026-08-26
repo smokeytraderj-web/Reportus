@@ -12,7 +12,8 @@
       ],
       "required_uploads": [
         {"id": "risk_snapshot", "label": "Riskalyze current portfolio", "description": "Fetch it automatically or upload a full-width screenshot; Reporticles locally removes the client and account rows before analysis.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv", ".png", ".jpg", ".jpeg"]},
-        {"id": "attribution", "label": "Attribution report", "description": "Performance contribution and holding-level results.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv"]},
+        {"id": "holdings", "label": "Client 360 holdings workbook", "description": "Upload the current household holdings as an Excel workbook.", "accepted_extensions": [".xlsx", ".xlsm"]},
+        {"id": "attribution", "label": "J.P. Morgan attribution report", "description": "Upload the performance attribution report with contributors and detractors.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv"]},
         {"id": "market_report", "label": "Market report", "description": "Sector performance, commentary, and earnings outlook.", "accepted_extensions": [".pdf", ".pptx", ".docx", ".xlsx", ".xlsm", ".csv", ".png", ".jpg", ".jpeg"]}
       ],
       "optional_uploads": [

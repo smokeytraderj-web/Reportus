@@ -45,6 +45,16 @@ class WorkflowTests(unittest.TestCase):
                 with self.subTest(workflow=workflow.skill_id, slot=requirement.requirement_id):
                     self.assertTrue(requirement.accepted_extensions)
 
+    def test_client_deck_requires_holdings_and_attribution_uploads(self) -> None:
+        workflow = next(
+            item for item in load_workflows() if item.skill_id == "client-deck-builder"
+        )
+        requirements = {item.requirement_id: item for item in workflow.required_uploads}
+
+        self.assertIn("holdings", requirements)
+        self.assertIn("attribution", requirements)
+        self.assertEqual(requirements["holdings"].accepted_extensions, (".xlsx", ".xlsm"))
+
 
 if __name__ == "__main__":
     unittest.main()
