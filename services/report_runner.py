@@ -128,19 +128,21 @@ def _single_file(selections: dict[str, tuple[Path, ...]], slot: str) -> Path:
     return paths[0]
 
 
-def _validate_landscape_letter_template(path: Path) -> None:
-    """Fail when a reference cannot use the installed fixed-page report layout."""
+def _validate_reference_pdf(path: Path) -> None:
+    """Verify that a visual reference is readable without constraining its page shape."""
 
     try:
         reader = PdfReader(path)
+        if reader.is_encrypted:
+            raise ReportRunError("Encrypted reference PDFs are not supported.")
         if not reader.pages:
             raise ReportRunError("The reference PDF has no pages.")
         for number, page in enumerate(reader.pages, start=1):
             width = float(page.mediabox.width)
             height = float(page.mediabox.height)
-            if abs(width - 792) > 2 or abs(height - 612) > 2:
+            if width <= 0 or height <= 0:
                 raise ReportRunError(
-                    f"Reference PDF page {number} must be US Letter landscape (11 × 8.5 inches)."
+                    f"Reference PDF page {number} has an invalid page size."
                 )
     except ReportRunError:
         raise
@@ -435,7 +437,7 @@ class ReportRunner:
 
             workbook = _single_file(staged, "spreadsheet")
             template = _single_file(staged, "template")
-            _validate_landscape_letter_template(template)
+            _validate_reference_pdf(template)
 
             required = ("client_name", "period_label", "report_title", "source_label")
             missing = [key.replace("_", " ") for key in required if not request.options.get(key, "").strip()]
