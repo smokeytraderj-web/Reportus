@@ -17,16 +17,23 @@ from generators.excel_to_pdf import (
 )
 
 
-def _workbook(path: Path, *, note: str = "Buy - Strong earnings outlook.") -> None:
+def _workbook(
+    path: Path,
+    *,
+    note: str = "Buy - Strong earnings outlook.",
+    include_sections: bool = True,
+) -> None:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "August"
     sheet.append([None, "As-Of Date", dt.date(2026, 8, 25)])
     sheet.append([None, "Default Rec. Date", dt.date(2026, 6, 1)])
     sheet.append([None, "S&P 500 Total Return (benchmark)", None, None, None, .0712])
-    sheet.append([None, "Technology"])
+    if include_sections:
+        sheet.append([None, "Technology"])
     sheet.append([None, "Example Holdings", "EXM", "data", None, .1234, .0522, note, 125.678, "YCharts"])
-    sheet.append([None, "Financials"])
+    if include_sections:
+        sheet.append([None, "Financials"])
     sheet.append([None, "Sample Bank", "SBK", "data", None, -.0123, -.0835, "Hold - Awaiting clarity.", 82.2, "Internal"])
     workbook.save(path)
 
@@ -58,6 +65,16 @@ class ExcelToPDFGeneratorTests(unittest.TestCase):
             self.assertIn("Source: YCharts", document)
             self.assertIn("Gottfried &amp; Somberg Wealth Management", document)
             self.assertNotIn("LLC", document)
+
+    def test_uses_sheet_name_when_section_rows_are_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "report.xlsx"
+            _workbook(source, include_sections=False)
+
+            reviews = load_stock_reviews(source, _config())
+
+            self.assertEqual(tuple(section.name for section in reviews[0].sections), ("August",))
+            self.assertEqual(len(reviews[0].sections[0].rows), 2)
 
     def test_rejects_missing_rating_instead_of_inventing_one(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
