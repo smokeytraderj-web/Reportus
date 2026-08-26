@@ -33,11 +33,11 @@ class UploadBox(QFrame):
         self.setObjectName("UploadBox")
         self.setProperty("active", False)
         self.setAcceptDrops(True)
-        self.setMinimumHeight(108)
+        self.setMinimumHeight(116)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 15, 18, 15)
-        layout.setSpacing(5)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(6)
 
         self.title_row = QHBoxLayout()
         title = QLabel(label)
@@ -53,7 +53,7 @@ class UploadBox(QFrame):
         hint.setObjectName("Muted")
         hint.setWordWrap(True)
         self.file_label = QLabel("Drop files here or choose files")
-        self.file_label.setObjectName("Muted")
+        self.file_label.setObjectName("FileLabel")
 
         layout.addLayout(self.title_row)
         layout.addWidget(hint)
@@ -110,11 +110,11 @@ class ReportCard(QFrame):
         self.setMinimumHeight(180)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 20, 22, 20)
-        layout.setSpacing(9)
+        layout.setContentsMargins(24, 21, 24, 21)
+        layout.setSpacing(10)
 
         number = QLabel(f"0{index}")
-        number.setStyleSheet("color: #B49A58; font-size: 12px; font-weight: 700;")
+        number.setObjectName("CardNumber")
         title_label = QLabel(title)
         title_label.setObjectName("SectionTitle")
         subtitle_label = QLabel(subtitle)

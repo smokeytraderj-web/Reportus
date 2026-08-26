@@ -6,13 +6,13 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PySide6.QtWidgets import QApplication, QLineEdit
+    from PySide6.QtWidgets import QApplication, QFrame, QLineEdit
 
     from core.workflows import load_workflows
     from ui.pages import IntakePage
     from ui.widgets import UploadBox
 except ImportError:  # pragma: no cover - CI may run the non-GUI dependency set
-    QApplication = QLineEdit = IntakePage = UploadBox = None
+    QApplication = QFrame = QLineEdit = IntakePage = UploadBox = None
     load_workflows = None
 
 
@@ -46,6 +46,15 @@ class IntakePageTests(unittest.TestCase):
                     self.assertIsNone(page.riskalyze_button)
                     self.assertIsNone(page.riskalyze_preview_button)
 
+        page.deleteLater()
+        self.application.processEvents()
+
+    def test_home_page_uses_branded_hero(self) -> None:
+        from ui.pages import HomePage
+
+        page = HomePage(load_workflows())
+
+        self.assertIsNotNone(page.findChild(QFrame, "HomeHero"))
         page.deleteLater()
         self.application.processEvents()
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QThread, Signal
+from PySide6.QtCore import QSettings, QThread, Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -97,21 +97,34 @@ class MainWindow(QMainWindow):
 
         topbar = QFrame()
         topbar.setObjectName("TopBar")
-        topbar.setFixedHeight(76)
+        topbar.setFixedHeight(92)
         topbar_layout = QHBoxLayout(topbar)
-        topbar_layout.setContentsMargins(34, 12, 34, 12)
+        topbar_layout.setContentsMargins(40, 13, 40, 13)
+        topbar_layout.setSpacing(14)
+
+        brand_mark = QFrame()
+        brand_mark.setObjectName("BrandMark")
+        brand_mark.setFixedSize(50, 50)
+        mark_layout = QVBoxLayout(brand_mark)
+        mark_layout.setContentsMargins(0, 0, 0, 0)
+        initials = QLabel("GS")
+        initials.setObjectName("BrandInitials")
+        initials.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark_layout.addWidget(initials)
+        topbar_layout.addWidget(brand_mark)
+
         brand = QVBoxLayout()
-        brand.setSpacing(1)
-        wordmark = QLabel("Reporticles")
+        brand.setSpacing(2)
+        wordmark = QLabel("GOTTFRIED & SOMBERG WEALTH MANAGEMENT")
         wordmark.setObjectName("Wordmark")
-        firm = QLabel("Gottfried & Somberg Wealth Management")
+        firm = QLabel("REPORTICLES  ·  PRIVATE REPORTING WORKSPACE")
         firm.setObjectName("FirmName")
         brand.addWidget(wordmark)
         brand.addWidget(firm)
         topbar_layout.addLayout(brand)
         topbar_layout.addStretch()
-        privacy = QLabel("LOCAL PRIVACY CHECK")
-        privacy.setStyleSheet("color: #277A57; font-size: 10px; font-weight: 700;")
+        privacy = QLabel("LOCAL  ·  PRIVACY CHECKED")
+        privacy.setObjectName("PrivacyBadge")
         topbar_layout.addWidget(privacy)
         root_layout.addWidget(topbar)
 
