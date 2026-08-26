@@ -307,7 +307,9 @@ class IntakePage(QWidget):
         self.riskalyze_preview_path = result.preview_path
         if self.riskalyze_preview_button is not None:
             self.riskalyze_preview_button.setVisible(True)
-        self.status.setText("Riskalyze exact match captured and privacy-safe analytics are ready.")
+        self.status.setText(
+            f"Riskalyze matched {result.matched_name}; privacy-safe analytics are ready."
+        )
         self.status.setStyleSheet(f"color: {SUCCESS};")
 
     def _riskalyze_failed(self, message: str) -> None:

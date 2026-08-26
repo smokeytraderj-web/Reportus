@@ -10,7 +10,7 @@ A minimal Windows desktop application for building polished financial reports fr
 - PowerPoint Deck generation from a strict JSON content package through the supplied Windows PowerPoint/GSWM-template workflow.
 - Provider-neutral structured synthesis with a disabled-by-default, free local Ollama option and numeric source-grounding checks.
 - Client Deck PPTX/PDF generation engine with synthetic end-to-end coverage.
-- Exact-match Riskalyze Current Portfolio capture through a dedicated local browser profile, with account-level details removed before report synthesis.
+- Clear closest-match Riskalyze Current Portfolio capture through a dedicated local browser profile, with ambiguous households blocked and account-level details removed before report synthesis.
 - Isolated report sessions, embedded PDF review, a temporary Data & Sources audit, explicit finalization, automatic filename versioning, and verified cleanup.
 - One-change, text-only PowerPoint revisions with privacy, citation, numeric-grounding, and atomic-replacement guards.
 - General document-to-deck synthesis is connected; custom sections, external research, and revisions for deterministic Excel reports remain in development.

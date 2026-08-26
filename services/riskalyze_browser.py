@@ -10,6 +10,7 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from decimal import Decimal
+from difflib import SequenceMatcher
 from pathlib import Path
 from urllib.parse import urljoin
 
@@ -34,6 +35,13 @@ class RiskalyzeCaptureResult:
     source_path: Path
     preview_path: Path
     matched_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class RiskalyzeClientMatch:
+    href: str
+    display_name: str
+    score: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,28 +187,107 @@ def _normalize_household(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.casefold())
 
 
-def exact_client_href(client_name: str, candidates: Iterable[tuple[str, str]]) -> str:
-    """Return one exact household link or fail rather than selecting a similar client."""
+def _name_tokens(text: str) -> tuple[str, ...]:
+    ignored = {"and", "the", "family", "household", "client"}
+    tokens = re.findall(r"[a-z0-9]+", text.casefold().replace("&", " and "))
+    canonical = []
+    for token in tokens:
+        if token in ignored:
+            continue
+        if len(token) > 4 and token.endswith("s") and not token.endswith("ss"):
+            token = token[:-1]
+        canonical.append(token)
+    return tuple(canonical)
+
+
+def _candidate_name(text: str) -> str:
+    return next((line.strip() for line in text.splitlines() if line.strip()), text.strip())
+
+
+def _household_score(query: str, candidate: str) -> float:
+    query_tokens = _name_tokens(query)
+    candidate_tokens = _name_tokens(candidate)
+    if not query_tokens or not candidate_tokens:
+        return 0.0
+    query_joined = "".join(query_tokens)
+    candidate_joined = "".join(candidate_tokens)
+    if query_joined == candidate_joined:
+        return 1.0
+
+    query_set = set(query_tokens)
+    candidate_set = set(candidate_tokens)
+    overlap = len(query_set & candidate_set)
+    coverage = overlap / len(query_set)
+    precision = overlap / len(candidate_set)
+    sequence = SequenceMatcher(None, query_joined, candidate_joined).ratio()
+    token_sequence = SequenceMatcher(
+        None, " ".join(sorted(query_tokens)), " ".join(sorted(candidate_tokens))
+    ).ratio()
+    query_similarity = sum(
+        max(SequenceMatcher(None, left, right).ratio() for right in candidate_tokens)
+        for left in query_tokens
+    ) / len(query_tokens)
+    candidate_similarity = sum(
+        max(SequenceMatcher(None, left, right).ratio() for left in query_tokens)
+        for right in candidate_tokens
+    ) / len(candidate_tokens)
+    similarity_total = query_similarity + candidate_similarity
+    soft_similarity = (
+        2 * query_similarity * candidate_similarity / similarity_total
+        if similarity_total
+        else 0.0
+    )
+    subset_score = 0.0
+    if query_set <= candidate_set or candidate_set <= query_set:
+        subset_score = 0.83 + 0.12 * min(coverage, precision)
+    return max(
+        sequence,
+        token_sequence,
+        subset_score,
+        0.70 * coverage + 0.20 * precision,
+        0.92 * soft_similarity,
+        0.85 * query_similarity if len(query_tokens) == 1 else 0.0,
+    )
+
+
+def closest_client_match(
+    client_name: str, candidates: Iterable[tuple[str, str]]
+) -> RiskalyzeClientMatch:
+    """Return one clear exact or fuzzy household match without silently guessing."""
 
     target = _normalize_household(client_name)
-    matches: dict[str, str] = {}
+    by_href: dict[str, RiskalyzeClientMatch] = {}
     for text, href in candidates:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if any(_normalize_household(line) == target for line in lines):
-            matches[href] = text
-    if not matches:
-        raise RiskalyzeCaptureError(
-            "No exact Riskalyze household match was found. Check the client name and try again."
+        display_name = _candidate_name(text)
+        score = 1.0 if _normalize_household(display_name) == target else _household_score(
+            client_name, display_name
         )
-    if len(matches) > 1:
+        existing = by_href.get(href)
+        if existing is None or score > existing.score:
+            by_href[href] = RiskalyzeClientMatch(href, display_name, score)
+
+    ranked = sorted(by_href.values(), key=lambda item: item.score, reverse=True)
+    if not ranked or ranked[0].score < 0.66:
         raise RiskalyzeCaptureError(
-            "More than one exact Riskalyze household match was found. Refine the client name."
+            "No close Riskalyze household match was found. Check the client name and try again."
         )
-    return next(iter(matches))
+    if len(ranked) > 1 and ranked[0].score - ranked[1].score < 0.08:
+        choices = "; ".join(item.display_name for item in ranked[:3])
+        raise RiskalyzeCaptureError(
+            f"Several Riskalyze households are similarly close: {choices}. "
+            "Enter a more specific client name."
+        )
+    return ranked[0]
+
+
+def exact_client_href(client_name: str, candidates: Iterable[tuple[str, str]]) -> str:
+    """Backward-compatible link helper using the clear closest household match."""
+
+    return closest_client_match(client_name, candidates).href
 
 
 class RiskalyzeBrowserCapture:
-    """Search an exact household and capture its Current Portfolio analytics locally."""
+    """Find one clear household match and capture its Current Portfolio analytics locally."""
 
     def __init__(
         self,
@@ -244,12 +331,16 @@ class RiskalyzeBrowserCapture:
                         notify("Riskalyze opened. Sign in and complete MFA if requested.")
                         page.goto(RISKALYZE_CLIENTS_URL, wait_until="domcontentloaded", timeout=60_000)
                         search = self._wait_for_client_search(page)
-                        notify("Searching for the exact Riskalyze household…")
+                        notify("Finding the closest Riskalyze household…")
                         search.fill(client_name)
                         page.wait_for_timeout(1_500)
                         candidates = self._client_candidates(page)
-                        client_href = exact_client_href(client_name, candidates)
-                        page.goto(urljoin(RISKALYZE_CLIENTS_URL, client_href), wait_until="domcontentloaded")
+                        client_match = closest_client_match(client_name, candidates)
+                        notify(f"Using closest Riskalyze match: {client_match.display_name}…")
+                        page.goto(
+                            urljoin(RISKALYZE_CLIENTS_URL, client_match.href),
+                            wait_until="domcontentloaded",
+                        )
                         portfolio_href = self._portfolio_href(page)
                         page.goto(urljoin(RISKALYZE_CLIENTS_URL, portfolio_href), wait_until="domcontentloaded")
                         page.get_by_text("PORTFOLIO TOTAL", exact=True).wait_for(
@@ -284,7 +375,7 @@ class RiskalyzeBrowserCapture:
             except PortalCaptureError as exc:
                 raise RiskalyzeCaptureError(str(exc)) from exc
         notify("Riskalyze capture verified and ready.")
-        return RiskalyzeCaptureResult(destination, preview_path, client_name)
+        return RiskalyzeCaptureResult(destination, preview_path, client_match.display_name)
 
     def _launch_context(self, playwright, playwright_error):
         options = {

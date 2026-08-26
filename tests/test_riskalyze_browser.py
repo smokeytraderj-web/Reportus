@@ -1,4 +1,4 @@
-"""Tests for exact Riskalyze household matching and safe portfolio extraction."""
+"""Tests for safe Riskalyze household matching and portfolio extraction."""
 
 import tempfile
 import unittest
@@ -6,6 +6,7 @@ from pathlib import Path
 
 from services.riskalyze_browser import (
     RiskalyzeCaptureError,
+    closest_client_match,
     exact_client_href,
     parse_riskalyze_portfolio,
     write_riskalyze_source,
@@ -48,14 +49,44 @@ class RiskalyzeBrowserTests(unittest.TestCase):
 
         self.assertEqual(href, "/client-details/2/overview")
 
-    def test_ambiguous_exact_matches_are_blocked(self) -> None:
-        with self.assertRaisesRegex(RiskalyzeCaptureError, "More than one exact"):
+    def test_plural_household_name_can_match_clear_client(self) -> None:
+        match = closest_client_match(
+            "The Carters",
+            (
+                ("Alex and Morgan Carter\nActive", "/client-details/1/overview"),
+                ("Jamie Carlson", "/client-details/2/overview"),
+            ),
+        )
+
+        self.assertEqual(match.href, "/client-details/1/overview")
+        self.assertEqual(match.display_name, "Alex and Morgan Carter")
+
+    def test_minor_typo_can_match_clear_client(self) -> None:
+        match = closest_client_match(
+            "Taylor Smth",
+            (
+                ("Taylor Smith", "/client-details/1/overview"),
+                ("Taylor Jones", "/client-details/2/overview"),
+            ),
+        )
+
+        self.assertEqual(match.display_name, "Taylor Smith")
+
+    def test_ambiguous_close_matches_are_blocked(self) -> None:
+        with self.assertRaisesRegex(RiskalyzeCaptureError, "similarly close"):
             exact_client_href(
-                "Sample Household",
+                "The Carters",
                 (
-                    ("Sample Household", "/client-details/1/overview"),
-                    ("Sample Household", "/client-details/2/overview"),
+                    ("Alex and Morgan Carter", "/client-details/1/overview"),
+                    ("Jordan and Casey Carter", "/client-details/2/overview"),
                 ),
+            )
+
+    def test_unrelated_name_is_blocked(self) -> None:
+        with self.assertRaisesRegex(RiskalyzeCaptureError, "No close"):
+            closest_client_match(
+                "Zzz",
+                (("Aaa", "/client-details/1/overview"),),
             )
 
     def test_visible_portfolio_text_becomes_safe_grounded_csv(self) -> None:
