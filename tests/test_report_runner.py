@@ -29,8 +29,8 @@ def _make_workbook(path: Path) -> None:
 
 
 def _make_template(path: Path) -> None:
-    document = canvas.Canvas(str(path), pagesize=(792, 612))
-    document.drawString(72, 540, "Approved synthetic report template")
+    document = canvas.Canvas(str(path), pagesize=(960, 540))
+    document.drawString(72, 468, "Approved synthetic widescreen report reference")
     document.save()
 
 
