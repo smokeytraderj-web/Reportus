@@ -472,7 +472,7 @@ class _PortfolioRenderer:
         )
 
     def allocation(self, data: PortfolioWorkbookData) -> None:
-        chunks = [data.holdings[index:index + 8] for index in range(0, len(data.holdings), 8)]
+        chunks = [data.holdings[index:index + 12] for index in range(0, len(data.holdings), 12)]
         for page_index, holdings in enumerate(chunks, start=1):
             title = "Target allocation" if page_index == 1 else "Target allocation (continued)"
             y = self._new_page(title)
@@ -530,7 +530,7 @@ class _PortfolioRenderer:
     def research(self, data: PortfolioWorkbookData) -> None:
         if not data.research_updates:
             return
-        chunks = [data.research_updates[index:index + 5] for index in range(0, len(data.research_updates), 5)]
+        chunks = [data.research_updates[index:index + 8] for index in range(0, len(data.research_updates), 8)]
         for page_index, updates in enumerate(chunks, start=1):
             title = "Recent research checks" if page_index == 1 else "Recent research checks (continued)"
             y = self._new_page(title, "SOURCE-GROUNDED REVIEW")
@@ -560,7 +560,7 @@ class _PortfolioRenderer:
     def sources(self, data: PortfolioWorkbookData) -> None:
         if not data.sources:
             return
-        chunks = [data.sources[index:index + 9] for index in range(0, len(data.sources), 9)]
+        chunks = [data.sources[index:index + 10] for index in range(0, len(data.sources), 10)]
         for page_index, sources in enumerate(chunks, start=1):
             title = "Sources and data audit" if page_index == 1 else "Sources and data audit (continued)"
             y = self._new_page(title, "AUDIT TRAIL")
