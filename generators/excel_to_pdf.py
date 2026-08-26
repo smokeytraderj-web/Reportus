@@ -174,9 +174,7 @@ def load_stock_reviews(workbook_path: Path, config: StockReviewConfig) -> tuple[
                     sections.append((label, []))
                     continue
                 if not sections:
-                    raise ExcelToPDFError(
-                        f"{definition.sheet_name} row {row_number}: add a section heading before data rows."
-                    )
+                    sections.append((definition.sheet_name, []))
                 if ticker_value is None:
                     raise ExcelToPDFError(f"{definition.sheet_name} row {row_number}: ticker is required.")
 
