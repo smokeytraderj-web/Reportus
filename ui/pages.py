@@ -207,9 +207,24 @@ class IntakePage(QWidget):
         self.field_inputs.clear()
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+            self._delete_layout_item(item)
+
+    @classmethod
+    def _delete_layout_item(cls, item) -> None:
+        """Remove widgets inside nested layouts immediately when workflows change."""
+
+        widget = item.widget()
+        if widget is not None:
+            widget.hide()
+            widget.setParent(None)
+            widget.deleteLater()
+            return
+        layout = item.layout()
+        if layout is None:
+            return
+        while layout.count():
+            cls._delete_layout_item(layout.takeAt(0))
+        layout.deleteLater()
 
     def validate_and_review(self) -> None:
         if self.workflow is None:
