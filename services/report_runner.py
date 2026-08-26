@@ -48,6 +48,7 @@ from providers.registry import provider_from_environment
 from quality.output_qa import OutputInspector
 from quality.grounding import verify_numeric_grounding
 from security.privacy import PrivacyScanner
+from security.portal_capture import PortalCaptureError, prepare_client_deck_portal_captures
 from services.powerpoint_com import build_powerpoint_deck
 from services.conversion import convert_pptx_to_pdf
 from tools.filenames import sanitize_filename, versioned_output_path
@@ -214,9 +215,25 @@ class ReportRunner:
         self.presentation_converter = presentation_converter or convert_pptx_to_pdf
 
     def prepare(self, request: ReportRunRequest) -> PreparedReport:
-        source_paths = [path for paths in request.selections.values() for path in paths]
-        privacy = PrivacyScanner().scan_files(source_paths)
+        prepared_selections = None
+        if request.skill_id == "client-deck-builder":
+            try:
+                prepared_selections = prepare_client_deck_portal_captures(request.selections)
+            except PortalCaptureError as exc:
+                raise ReportRunError(str(exc)) from exc
+        effective_selections = (
+            prepared_selections.selections if prepared_selections is not None else request.selections
+        )
+        source_paths = [path for paths in effective_selections.values() for path in paths]
+        try:
+            privacy = PrivacyScanner().scan_files(source_paths)
+        except Exception:
+            if prepared_selections is not None:
+                prepared_selections.cleanup()
+            raise
         if not privacy.approved:
+            if prepared_selections is not None:
+                prepared_selections.cleanup()
             categories = sorted({finding.category.value for finding in privacy.findings})
             details = []
             if categories:
@@ -225,6 +242,8 @@ class ReportRunner:
                 details.append("replace files that could not be inspected")
             raise ReportRunError("Privacy check failed: " + "; ".join(details) + ".")
         if request.custom_prompt.strip():
+            if prepared_selections is not None:
+                prepared_selections.cleanup()
             raise ReportRunError(
                 "Custom-section generation is not enabled yet; remove it before generating this report."
             )
@@ -232,10 +251,21 @@ class ReportRunner:
             "client-deck-builder", "template-pdf-report", "excel-workbook-builder",
             "powerpoint-deck-builder",
         }:
+            if prepared_selections is not None:
+                prepared_selections.cleanup()
             raise ReportRunError("This report generator is not connected yet.")
-        session = ReportSession.create(self.session_root)
         try:
-            staged = _stage_inputs(session, request.selections)
+            session = ReportSession.create(self.session_root)
+        except Exception:
+            if prepared_selections is not None:
+                prepared_selections.cleanup()
+            raise
+        try:
+            try:
+                staged = _stage_inputs(session, effective_selections)
+            finally:
+                if prepared_selections is not None:
+                    prepared_selections.cleanup()
             if request.skill_id == "client-deck-builder":
                 required_options = ("client_name", "period", "as_of", "report_date")
                 missing = [key.replace("_", " ") for key in required_options if not request.options.get(key, "").strip()]
@@ -255,6 +285,9 @@ class ReportRunner:
                     instructions=(
                         "Map the approved portfolio-review sources into the Client Deck JSON contract. "
                         "Copy values exactly; do not calculate missing fields or infer investment conclusions. "
+                        "For risk_metrics, include Portfolio total, Risk, Historical loss, Historical loss %, "
+                        "Historical gain, Historical gain %, Annual dividend, Max drawdown, Annual range midpoint, "
+                        "and Expense ratio when those values are shown. "
                         "Returns and contributions must be decimal numbers (0.052 means 5.20%); sector exposures "
                         "must be percentage points (5.20 means 5.20%). Include optional_sections only when the "
                         f"corresponding real source is present. Uploaded sections: {included_slots}. "

@@ -4,10 +4,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from extraction.content import ContentExtractor, ExtractionError
+from extraction.content import ContentExtractor, ExtractionError, _normalize_riskalyze_range
 
 
 class ContentExtractorTests(unittest.TestCase):
+    def test_normalizes_riskalyze_historical_range_labels(self) -> None:
+        normalized = _normalize_riskalyze_range(
+            "-$1,095, 357 +$1,970,096\n10.55% +18.97%\n"
+        )
+
+        self.assertIn("Historical loss: -$1,095,357", normalized)
+        self.assertIn("Historical loss %: -10.55%", normalized)
+        self.assertIn("Historical gain: +$1,970,096", normalized)
+        self.assertIn("Historical gain %: +18.97%", normalized)
+
     def test_csv_rows_keep_source_locators(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "data.csv"

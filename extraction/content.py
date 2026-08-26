@@ -4,16 +4,43 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+from PIL import Image, ImageFilter, ImageOps
 
 from providers.base import SourceFragment
 
 
 class ExtractionError(RuntimeError):
     pass
+
+
+_SIGNED_AMOUNT = re.compile(r"[+-]\s*\$\s*\d[\d,\s]*\d")
+_DECIMAL_PERCENT = re.compile(r"\+?\d+\.\d+%")
+
+
+def _normalize_riskalyze_range(text: str) -> str:
+    """Add deterministic labels to the four values in Riskalyze's range card."""
+
+    amounts = [re.sub(r"\s+", "", value) for value in _SIGNED_AMOUNT.findall(text)]
+    percentages = _DECIMAL_PERCENT.findall(text)
+    loss = next((value for value in amounts if value.startswith("-")), "")
+    gain = next((value for value in amounts if value.startswith("+")), "")
+    if not loss or not gain or len(percentages) < 2:
+        return text
+    loss_percent = percentages[0].lstrip("+")
+    gain_percent = percentages[1].lstrip("+")
+    labels = (
+        f"Historical loss: {loss}",
+        f"Historical loss %: -{loss_percent}",
+        f"Historical gain: {gain}",
+        f"Historical gain %: +{gain_percent}",
+    )
+    return text.rstrip() + "\n\n" + "\n".join(labels) + "\n"
 
 
 class ContentExtractor:
@@ -80,7 +107,8 @@ class ContentExtractor:
                 for number, slide in enumerate(presentation.slides, start=1)
             ]
         if extension in {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}:
-            return [SourceFragment(path.name, "image OCR", self._ocr(path))]
+            text = self._ocr_riskalyze(path) if path.stem.startswith("riskalyze_analytics_") else self._ocr(path)
+            return [SourceFragment(path.name, "image OCR", text)]
         raise ExtractionError(f"{path.name} is not supported for local text extraction.")
 
     def _extract_workbook(self, path: Path) -> list[SourceFragment]:
@@ -115,3 +143,34 @@ class ContentExtractor:
             if completed.returncode != 0 or not text_path.is_file():
                 raise ExtractionError("Image OCR failed.")
             return text_path.read_text(encoding="utf-8", errors="replace")
+
+    def _ocr_riskalyze(self, path: Path) -> str:
+        """OCR the safe analytics crop plus an enlarged historical-range card."""
+
+        executable = shutil.which("tesseract")
+        if executable is None:
+            raise ExtractionError("Image OCR is unavailable.")
+        with tempfile.TemporaryDirectory(prefix="reportus-riskalyze-ocr-") as temporary:
+            root = Path(temporary)
+            with Image.open(path) as raw:
+                image = ImageOps.autocontrast(ImageOps.grayscale(raw)).filter(ImageFilter.SHARPEN)
+                full_path = root / "analytics.png"
+                image.save(full_path)
+                range_panel = image.crop((0, round(image.height * .38), image.width, round(image.height * .58)))
+                range_panel = range_panel.resize(
+                    (round(range_panel.width * 2.5), round(range_panel.height * 2.5)),
+                    Image.Resampling.LANCZOS,
+                )
+                range_path = root / "historical-range.png"
+                range_panel.save(range_path)
+
+            outputs = []
+            for image_path, psm in ((full_path, "4"), (range_path, "6")):
+                completed = subprocess.run(
+                    [executable, str(image_path), "stdout", "--psm", psm],
+                    capture_output=True, text=True, timeout=90, check=False,
+                )
+                if completed.returncode != 0:
+                    raise ExtractionError("Riskalyze image OCR failed.")
+                outputs.append(completed.stdout)
+            return outputs[0].rstrip() + "\n\n" + _normalize_riskalyze_range(outputs[1])

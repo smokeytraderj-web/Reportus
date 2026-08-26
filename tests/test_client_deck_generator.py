@@ -17,7 +17,13 @@ class ClientDeckGeneratorTests(unittest.TestCase):
             period="August 2026",
             as_of="As of August 25, 2026",
             allocation=(AllocationRow("Domestic Equity", 500000), AllocationRow("Fixed Income", 300000), AllocationRow("Cash", 200000)),
-            risk_metrics={"Portfolio total": "$1,000,000", "Risk": "53", "Annual dividend": "2.26%", "Max drawdown": "-13.07%"},
+            risk_metrics={
+                "Portfolio total": "$1,000,000", "Risk": "53",
+                "Historical loss": "-$105,500", "Historical loss %": "-10.55%",
+                "Historical gain": "+$189,700", "Historical gain %": "+18.97%",
+                "Annual dividend": "2.26%", "Max drawdown": "-13.07%",
+                "Annual range midpoint": "8.60%", "Expense ratio": "0.26%",
+            },
             sector_performance={"Tech": .14, "Financials": .05, "Energy": .22},
             sector_portfolio={"Tech": 30.0, "Financials": 14.0, "Energy": 4.0},
             sector_benchmark={"Tech": 36.0, "Financials": 12.0, "Energy": 3.0},
@@ -37,6 +43,14 @@ class ClientDeckGeneratorTests(unittest.TestCase):
 
             self.assertTrue(result.approved, result.issues)
             self.assertEqual(result.page_or_sheet_count, 9)
+            from pptx import Presentation
+            risk_text = "\n".join(
+                shape.text for shape in Presentation(output).slides[3].shapes
+                if hasattr(shape, "text")
+            )
+            self.assertIn("95% HISTORICAL RANGE (6 MONTHS)", risk_text)
+            self.assertIn("-$105,500", risk_text)
+            self.assertIn("+$189,700", risk_text)
             if shutil.which("libreoffice") or shutil.which("soffice"):
                 pdf = Path(directory) / "Sample_Client_Deck.pdf"
                 convert_pptx_to_pdf(output, pdf)

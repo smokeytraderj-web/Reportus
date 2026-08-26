@@ -121,7 +121,7 @@ def normalize_client_deck_payload(payload: dict[str, object], *, client_name: st
         raise ClientDeckContentError(
             "risk_metrics requires Portfolio total, Risk, Annual dividend, and Max drawdown."
         )
-    if len(risk_value) > 8:
+    if len(risk_value) > 12:
         raise ClientDeckContentError("risk_metrics contains too many values.")
     risk_metrics = {
         _text(key, "risk metric label", limit=40): _text(value, f"risk metric {key}", limit=40)

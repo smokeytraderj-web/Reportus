@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
-from pptx.util import Inches
+from pptx.util import Inches, Pt
 
 from config.settings import PROJECT_ROOT
 
@@ -64,6 +66,121 @@ def _source(slide, text: str) -> None:
                        f"Source: {text}", 8, style.BODY_GRAY, font=style.BODY_FONT, italic=True)
 
 
+def _risk_metric(metrics: dict[str, str], *labels: str) -> str:
+    normalized = {
+        re.sub(r"[^a-z0-9%]", "", key.casefold()): value
+        for key, value in metrics.items()
+    }
+    for label in labels:
+        value = normalized.get(re.sub(r"[^a-z0-9%]", "", label.casefold()))
+        if value:
+            return value
+    return ""
+
+
+def _risk_number(text: str) -> int | None:
+    match = re.search(r"\d{1,3}", text or "")
+    if match is None:
+        return None
+    value = int(match.group())
+    return value if 1 <= value <= 99 else None
+
+
+def _add_riskalyze_snapshot(slide, data: ClientDeckData) -> None:
+    """Recreate Riskalyze's information hierarchy in the GSWM visual system."""
+
+    metrics = data.risk_metrics
+    portfolio_total = _risk_metric(metrics, "Portfolio total")
+    risk_number = _risk_number(_risk_metric(metrics, "Risk"))
+    loss_amount = _risk_metric(metrics, "Historical loss", "95% historical loss")
+    loss_percent = _risk_metric(metrics, "Historical loss %", "95% historical loss %")
+    gain_amount = _risk_metric(metrics, "Historical gain", "95% historical gain")
+    gain_percent = _risk_metric(metrics, "Historical gain %", "95% historical gain %")
+
+    style.add_text(slide, Inches(.78), Inches(1.55), Inches(2.4), Inches(.2),
+                   "PORTFOLIO TOTAL", 8, style.GOLD, font=style.BODY_FONT, bold=True, spacing=.7)
+    style.add_text(slide, Inches(.78), Inches(1.82), Inches(4.2), Inches(.52),
+                   portfolio_total, 26, style.NAVY, font=style.TITLE_FONT, bold=True)
+
+    risk_circle = slide.shapes.add_shape(
+        MSO_SHAPE.OVAL, Inches(11.35), Inches(1.48), Inches(1.05), Inches(1.05)
+    )
+    risk_circle.fill.background()
+    risk_circle.line.color.rgb = style.GOLD
+    risk_circle.line.width = Pt(1.6)
+    style.no_shadow(risk_circle)
+    style.add_text(slide, Inches(11.48), Inches(1.62), Inches(.8), Inches(.16),
+                   "RISK", 8, style.GOLD, font=style.BODY_FONT, bold=True,
+                   align=PP_ALIGN.CENTER, spacing=.5)
+    style.add_text(slide, Inches(11.48), Inches(1.82), Inches(.8), Inches(.42),
+                   str(risk_number or "—"), 25, style.NAVY, font=style.TITLE_FONT,
+                   bold=True, align=PP_ALIGN.CENTER)
+
+    total_value = sum(row.value for row in data.allocation)
+    categories = [row.label for row in data.allocation]
+    values = [row.value / total_value for row in data.allocation]
+    style.add_donut_chart(
+        slide, Inches(.72), Inches(2.38), Inches(3.15), Inches(3.72), categories, values,
+        hole_size=68,
+    )
+    legend_top = 2.74
+    for index, (label, value) in enumerate(zip(categories[:6], values[:6])):
+        top = legend_top + index * .46
+        style.add_rect(
+            slide, Inches(3.5), Inches(top + .04), Inches(.10), Inches(.10),
+            fill_rgb=style.CHART_COLORS[index % len(style.CHART_COLORS)],
+        )
+        style.add_text(slide, Inches(3.68), Inches(top), Inches(1.5), Inches(.18),
+                       label, 8.5, style.NAVY, font=style.BODY_FONT)
+        style.add_text(slide, Inches(4.66), Inches(top), Inches(.52), Inches(.18),
+                       f"{value:.2%}", 8.5, style.NAVY, font=style.BODY_FONT,
+                       bold=True, align=PP_ALIGN.RIGHT)
+
+    style.add_text(slide, Inches(5.42), Inches(2.42), Inches(6.95), Inches(.2),
+                   "95% HISTORICAL RANGE (6 MONTHS)", 8, style.GOLD,
+                   font=style.BODY_FONT, bold=True, spacing=.65)
+    if loss_amount and gain_amount:
+        style.add_text(slide, Inches(5.42), Inches(2.74), Inches(2.85), Inches(.35),
+                       loss_amount, 19, style.RED, font=style.TITLE_FONT, bold=True,
+                       align=PP_ALIGN.CENTER)
+        style.add_text(slide, Inches(9.45), Inches(2.74), Inches(2.85), Inches(.35),
+                       gain_amount, 19, style.GREEN, font=style.TITLE_FONT, bold=True,
+                       align=PP_ALIGN.CENTER)
+        style.add_text(slide, Inches(5.42), Inches(3.10), Inches(2.85), Inches(.2),
+                       loss_percent, 9, style.BODY_GRAY, font=style.BODY_FONT,
+                       align=PP_ALIGN.CENTER)
+        style.add_text(slide, Inches(9.45), Inches(3.10), Inches(2.85), Inches(.2),
+                       gain_percent, 9, style.BODY_GRAY, font=style.BODY_FONT,
+                       align=PP_ALIGN.CENTER)
+        style.add_rect(slide, Inches(5.42), Inches(3.48), Inches(3.45), Pt(4), fill_rgb=style.RED)
+        style.add_rect(slide, Inches(8.87), Inches(3.48), Inches(3.43), Pt(4), fill_rgb=style.GREEN)
+        style.add_text(slide, Inches(5.42), Inches(3.60), Inches(1), Inches(.18),
+                       "5%", 8, style.BODY_GRAY, font=style.BODY_FONT)
+        style.add_text(slide, Inches(11.30), Inches(3.60), Inches(1), Inches(.18),
+                       "95%", 8, style.BODY_GRAY, font=style.BODY_FONT, align=PP_ALIGN.RIGHT)
+
+    detail_metrics = [
+        ("Annual dividend", _risk_metric(metrics, "Annual dividend")),
+        ("Max drawdown", _risk_metric(metrics, "Max drawdown")),
+        ("Annual range midpoint", _risk_metric(metrics, "Annual range midpoint")),
+        ("Expense ratio", _risk_metric(metrics, "Expense ratio", "Portfolio costs")),
+    ]
+    visible_metrics = [(label, value) for label, value in detail_metrics if value]
+    if visible_metrics:
+        card_width = 6.88 / len(visible_metrics)
+        for index, (label, value) in enumerate(visible_metrics):
+            left = 5.42 + index * card_width
+            style.add_rect(
+                slide, Inches(left), Inches(4.15), Inches(card_width - .14), Inches(1.18),
+                fill_rgb=style.LIGHT_ROW,
+            )
+            style.add_text(slide, Inches(left + .13), Inches(4.33), Inches(card_width - .4), Inches(.28),
+                           label.upper(), 7.5, style.GOLD, font=style.BODY_FONT,
+                           bold=True, spacing=.45)
+            style.add_text(slide, Inches(left + .13), Inches(4.70), Inches(card_width - .4), Inches(.36),
+                           value, 18, style.NAVY, font=style.TITLE_FONT, bold=True)
+
+
 def build_client_deck(data: ClientDeckData, output_path: Path) -> Path:
     """Build an editable branded deck; PDF conversion is a separate verified step."""
 
@@ -106,13 +223,7 @@ def build_client_deck(data: ClientDeckData, output_path: Path) -> Path:
 
     page += 1
     slide = _base_slide(prs, sections[1], page, total, data.as_of)
-    x, y = Inches(.85), Inches(1.75)
-    for index, (label, value) in enumerate(data.risk_metrics.items()):
-        left = x + Inches(3.0) * (index % 4)
-        top = y + Inches(1.3) * (index // 4)
-        style.add_rect(slide, left, top, Inches(2.65), Inches(1.0), fill_rgb=style.LIGHT_ROW)
-        style.add_text(slide, left + Inches(.15), top + Inches(.13), Inches(2.3), Inches(.2), label.upper(), 8, style.GOLD, bold=True, spacing=.7)
-        style.add_text(slide, left + Inches(.15), top + Inches(.42), Inches(2.3), Inches(.4), value, 20, style.NAVY, font=style.TITLE_FONT, bold=True)
+    _add_riskalyze_snapshot(slide, data)
     _source(slide, data.sources.get("risk", ""))
 
     page += 1

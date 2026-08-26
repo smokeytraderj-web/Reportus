@@ -40,7 +40,7 @@ class ReportRunnerTests(unittest.TestCase):
             root = Path(directory)
             sources = []
             for name, text in (
-                ("risk.csv", "Metric,Value\nPortfolio total,\"$1,000,000.00\"\nRisk,53\nAnnual dividend,2.26%\nMax drawdown,-13.07%\nEquity,600000\nFixed Income,400000\nTechnology portfolio,30.0%\nEnergy portfolio,4.0%\nTechnology benchmark,36.0%\nEnergy benchmark,3.0%\n"),
+                ("risk.csv", "Metric,Value\nPortfolio total,\"$1,000,000.00\"\nRisk,53\nHistorical loss,\"-$105,500\"\nHistorical loss %,-10.55%\nHistorical gain,\"+$189,700\"\nHistorical gain %,+18.97%\nAnnual dividend,2.26%\nMax drawdown,-13.07%\nAnnual range midpoint,8.60%\nExpense ratio,0.26%\nEquity,600000\nFixed Income,400000\nTechnology portfolio,30.0%\nEnergy portfolio,4.0%\nTechnology benchmark,36.0%\nEnergy benchmark,3.0%\n"),
                 ("attribution.csv", "Symbol,Holding,Return,Contribution\nIVV,S&P 500 ETF,13.37%,1.47%\nTLT,20+ Year Treasury ETF,-2.61%,-0.03%\n"),
                 ("market.csv", "Sector,Return\nTechnology,14.00%\nEnergy,-3.00%\nYear,Earnings\n2025,300\n2026E,380\n"),
             ):
@@ -49,7 +49,13 @@ class ReportRunnerTests(unittest.TestCase):
                 sources.append(path)
             provider = FixtureProvider([{
                 "allocation": [{"label": "Equity", "value": 600000}, {"label": "Fixed Income", "value": 400000}],
-                "risk_metrics": {"Portfolio total": "$1,000,000.00", "Risk": "53", "Annual dividend": "2.26%", "Max drawdown": "-13.07%"},
+                "risk_metrics": {
+                    "Portfolio total": "$1,000,000.00", "Risk": "53",
+                    "Historical loss": "-$105,500", "Historical loss %": "-10.55%",
+                    "Historical gain": "+$189,700", "Historical gain %": "+18.97%",
+                    "Annual dividend": "2.26%", "Max drawdown": "-13.07%",
+                    "Annual range midpoint": "8.60%", "Expense ratio": "0.26%",
+                },
                 "sector_performance": {"Technology": .14, "Energy": -.03},
                 "sector_portfolio": {"Technology": 30.0, "Energy": 4.0},
                 "sector_benchmark": {"Technology": 36.0, "Energy": 3.0},

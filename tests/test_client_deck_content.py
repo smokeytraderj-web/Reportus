@@ -11,7 +11,13 @@ from generators.client_deck_content import (
 def _payload() -> dict[str, object]:
     return {
         "allocation": [{"label": "Equity", "value": 600000}, {"label": "Fixed Income", "value": 400000}],
-        "risk_metrics": {"Portfolio total": "$1,000,000.00", "Risk": "53", "Annual dividend": "2.26%", "Max drawdown": "-13.07%"},
+        "risk_metrics": {
+            "Portfolio total": "$1,000,000.00", "Risk": "53",
+            "Historical loss": "-$105,500", "Historical loss %": "-10.55%",
+            "Historical gain": "+$189,700", "Historical gain %": "+18.97%",
+            "Annual dividend": "2.26%", "Max drawdown": "-13.07%",
+            "Annual range midpoint": "8.60%", "Expense ratio": "0.26%",
+        },
         "sector_performance": {"Technology": .14, "Energy": -.03},
         "sector_portfolio": {"Technology": 30.0, "Energy": 4.0},
         "sector_benchmark": {"Technology": 36.0, "Energy": 3.0},
