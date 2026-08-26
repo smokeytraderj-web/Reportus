@@ -1,1 +1,1 @@
-"""Replaceable structured-output providers for Reportus."""
+"""Replaceable structured-output providers for Reporticles."""

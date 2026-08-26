@@ -14,7 +14,7 @@ __pycache__/
 .venv/
 venv/
 
-# Reportus working and generated data
+# Reporticles working and generated data
 uploads/
 sessions/
 tmp/
@@ -27,7 +27,7 @@ reports/generated/
 build/
 dist/
 *.spec
-!packaging/windows/Reportus.spec
+!packaging/windows/Reporticles.spec
 
 # Editors and operating systems
 .idea/

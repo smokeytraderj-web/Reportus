@@ -9,7 +9,7 @@ $BuildVenv = Join-Path $ProjectRoot ".build-venv"
 $BuildPython = Join-Path $BuildVenv "Scripts\python.exe"
 
 if ($env:OS -ne "Windows_NT") {
-    throw "Reportus must be packaged on Windows."
+    throw "Reporticles must be packaged on Windows."
 }
 
 Set-Location $ProjectRoot
@@ -38,11 +38,13 @@ if (-not (Test-Path $BuildPython)) {
 Invoke-Checked -FilePath $BuildPython -CommandArguments @("-m", "pip", "install", "--upgrade", "pip")
 Invoke-Checked -FilePath $BuildPython -CommandArguments @("-m", "pip", "install", "-r", "requirements.txt", "-r", "requirements-build.txt")
 Invoke-Checked -FilePath $BuildPython -CommandArguments @("-m", "unittest", "discover", "-s", "tests", "-v")
-Invoke-Checked -FilePath $BuildPython -CommandArguments @("-m", "PyInstaller", "--noconfirm", "--clean", "packaging\windows\Reportus.spec")
+$env:PLAYWRIGHT_BROWSERS_PATH = "0"
+Invoke-Checked -FilePath $BuildPython -CommandArguments @("-m", "playwright", "install", "chromium")
+Invoke-Checked -FilePath $BuildPython -CommandArguments @("-m", "PyInstaller", "--noconfirm", "--clean", "packaging\windows\Reporticles.spec")
 
-$PackagedApp = Join-Path $ProjectRoot "dist\Reportus\Reportus.exe"
+$PackagedApp = Join-Path $ProjectRoot "dist\Reporticles\Reporticles.exe"
 if (-not (Test-Path $PackagedApp)) {
-    throw "PyInstaller did not create Reportus.exe."
+    throw "PyInstaller did not create Reporticles.exe."
 }
 Invoke-Checked -FilePath $PackagedApp -CommandArguments @("--smoke-test")
 
@@ -54,8 +56,8 @@ if (-not $SkipInstaller) {
     if (-not $CompilerCandidates) {
         throw "Inno Setup 6 is required. Install it, then run this script again."
     }
-    Invoke-Checked -FilePath $CompilerCandidates[0] -CommandArguments @("packaging\windows\Reportus.iss")
-    $Installer = Get-ChildItem "dist\installer\Reportus-Setup-*.exe" |
+    Invoke-Checked -FilePath $CompilerCandidates[0] -CommandArguments @("packaging\windows\Reporticles.iss")
+    $Installer = Get-ChildItem "dist\installer\Reporticles-Setup-*.exe" |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
     if (-not $Installer) {

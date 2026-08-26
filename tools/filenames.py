@@ -14,7 +14,7 @@ _RESERVED = {
 }
 
 
-def sanitize_filename(filename: str, fallback: str = "Reportus_Report") -> str:
+def sanitize_filename(filename: str, fallback: str = "Reporticles_Report") -> str:
     """Return a portable filename while preserving a supplied extension."""
 
     candidate = _INVALID.sub("_", filename).strip().rstrip(". ")

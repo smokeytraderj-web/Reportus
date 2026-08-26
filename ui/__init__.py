@@ -1,1 +1,1 @@
-"""Reportus desktop interface."""
+"""Reporticles desktop interface."""

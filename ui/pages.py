@@ -1,10 +1,13 @@
-"""Reportus application pages."""
+"""Reporticles application pages."""
 
 from __future__ import annotations
 
+import tempfile
+import uuid
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QThread, QUrl, Qt, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -31,6 +34,11 @@ except ImportError:  # pragma: no cover - depends on the packaged Qt build
 from core.audit import ReportAudit
 from core.workflows import ReportWorkflow
 from security.privacy import PrivacyScanResult, PrivacyScanner
+from security.portal_capture import PortalCaptureError, prepare_client_deck_portal_captures
+from services.riskalyze_browser import (
+    RiskalyzeBrowserCapture,
+    RiskalyzeCaptureResult,
+)
 from validation.inputs import InputValidator
 from ui.theme import DANGER, SUCCESS
 from ui.widgets import ReportCard, UploadBox
@@ -49,7 +57,7 @@ class HomePage(QWidget):
         eyebrow.setStyleSheet("color: #B49A58; font-size: 11px; font-weight: 700;")
         title = QLabel("What would you like to build?")
         title.setObjectName("PageTitle")
-        subtitle = QLabel("Choose a report type. Reportus will guide the required inputs and checks.")
+        subtitle = QLabel("Choose a report type. Reporticles will guide the required inputs and checks.")
         subtitle.setObjectName("Muted")
 
         layout.addWidget(eyebrow)
@@ -68,6 +76,29 @@ class HomePage(QWidget):
         layout.addStretch()
 
 
+class RiskalyzeCaptureWorker(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+    progressed = Signal(str)
+
+    def __init__(self, capture_service, client_name: str, destination: Path, parent=None):
+        super().__init__(parent)
+        self.capture_service = capture_service
+        self.client_name = client_name
+        self.destination = destination
+
+    def run(self) -> None:
+        try:
+            result = self.capture_service.capture(
+                self.client_name,
+                self.destination,
+                status=self.progressed.emit,
+            )
+            self.completed.emit(result)
+        except Exception as exc:
+            self.failed.emit(str(exc) or "Riskalyze capture failed.")
+
+
 class IntakePage(QWidget):
     back_requested = Signal()
     review_ready = Signal(object, object, str, object)
@@ -76,15 +107,22 @@ class IntakePage(QWidget):
         self,
         scanner: PrivacyScanner | None = None,
         validator: InputValidator | None = None,
+        riskalyze_capture: RiskalyzeBrowserCapture | None = None,
         parent=None,
     ):
         super().__init__(parent)
         self.scanner = scanner or PrivacyScanner()
         self.validator = validator or InputValidator()
+        self.riskalyze_capture = riskalyze_capture or RiskalyzeBrowserCapture()
         self.workflow: ReportWorkflow | None = None
         self.upload_boxes: dict[str, UploadBox] = {}
         self.optional_checks: dict[str, QCheckBox] = {}
         self.field_inputs: dict[str, QLineEdit] = {}
+        self.riskalyze_worker: RiskalyzeCaptureWorker | None = None
+        self.riskalyze_button: QPushButton | None = None
+        self.riskalyze_preview_button: QPushButton | None = None
+        self.riskalyze_preview_path: Path | None = None
+        self.capture_directory = tempfile.TemporaryDirectory(prefix="reporticles-captures-")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(42, 28, 42, 32)
@@ -93,7 +131,7 @@ class IntakePage(QWidget):
         nav = QHBoxLayout()
         back = QPushButton("←  Reports")
         back.setObjectName("SecondaryButton")
-        back.clicked.connect(self.back_requested)
+        back.clicked.connect(self._request_back)
         nav.addWidget(back)
         nav.addStretch()
         root.addLayout(nav)
@@ -126,12 +164,15 @@ class IntakePage(QWidget):
         root.addLayout(footer)
 
     def set_workflow(self, workflow: ReportWorkflow) -> None:
+        self._clear_capture_files()
         self.workflow = workflow
         self.title.setText(workflow.title)
         self.subtitle.setText(workflow.subtitle)
         self.status.setText("Add the required files to continue.")
         self.status.setStyleSheet("")
         self._clear_content()
+        self.riskalyze_button = None
+        self.riskalyze_preview_button = None
 
         if workflow.fields:
             details_title = QLabel("Report details")
@@ -159,7 +200,20 @@ class IntakePage(QWidget):
         required_title.setObjectName("SectionTitle")
         self.content_layout.addWidget(required_title)
         for requirement in workflow.required_uploads:
-            self._add_upload_box(requirement.requirement_id, requirement.label, requirement.description)
+            box = self._add_upload_box(
+                requirement.requirement_id, requirement.label, requirement.description
+            )
+            if (
+                workflow.skill_id == "client-deck-builder"
+                and requirement.requirement_id == "risk_snapshot"
+            ):
+                self.riskalyze_button = box.add_action(
+                    "Fetch from Riskalyze", self._start_riskalyze_capture
+                )
+                self.riskalyze_preview_button = box.add_action(
+                    "View capture", self._open_riskalyze_preview
+                )
+                self.riskalyze_preview_button.setVisible(False)
 
         if workflow.optional_uploads:
             self.content_layout.addSpacing(10)
@@ -196,10 +250,103 @@ class IntakePage(QWidget):
         self.content_layout.addWidget(custom_box)
         self.content_layout.addStretch()
 
-    def _add_upload_box(self, slot_id: str, label: str, description: str) -> None:
+    def _add_upload_box(self, slot_id: str, label: str, description: str) -> UploadBox:
         box = UploadBox(slot_id, label, description)
         self.upload_boxes[slot_id] = box
         self.content_layout.addWidget(box)
+        return box
+
+    @property
+    def capture_in_progress(self) -> bool:
+        return self.riskalyze_worker is not None and self.riskalyze_worker.isRunning()
+
+    def _request_back(self) -> None:
+        if self.capture_in_progress:
+            self._show_error("Wait for the Riskalyze capture to finish before leaving this page.")
+            return
+        self.back_requested.emit()
+
+    def _start_riskalyze_capture(self) -> None:
+        if self.capture_in_progress:
+            return
+        client_editor = self.field_inputs.get("client_name")
+        client_name = client_editor.text().strip() if client_editor is not None else ""
+        if not client_name:
+            self._show_error("Enter the client or household name before fetching Riskalyze.")
+            return
+        self.riskalyze_preview_path = None
+        if self.riskalyze_preview_button is not None:
+            self.riskalyze_preview_button.setVisible(False)
+        destination = Path(self.capture_directory.name) / f"riskalyze_metrics_{uuid.uuid4().hex}.csv"
+        if self.riskalyze_button is not None:
+            self.riskalyze_button.setEnabled(False)
+            self.riskalyze_button.setText("Riskalyze open…")
+        self.review_button.setEnabled(False)
+        self.status.setText("Opening the secure Riskalyze browser…")
+        self.status.setStyleSheet("")
+        self.riskalyze_worker = RiskalyzeCaptureWorker(
+            self.riskalyze_capture, client_name, destination, self
+        )
+        self.riskalyze_worker.progressed.connect(self.status.setText)
+        self.riskalyze_worker.completed.connect(self._riskalyze_completed)
+        self.riskalyze_worker.failed.connect(self._riskalyze_failed)
+        self.riskalyze_worker.finished.connect(self._riskalyze_finished)
+        self.riskalyze_worker.start()
+
+    def _riskalyze_completed(self, result: RiskalyzeCaptureResult) -> None:
+        if self.workflow is None or self.workflow.skill_id != "client-deck-builder":
+            result.source_path.unlink(missing_ok=True)
+            result.preview_path.unlink(missing_ok=True)
+            return
+        box = self.upload_boxes.get("risk_snapshot")
+        if box is None:
+            result.source_path.unlink(missing_ok=True)
+            result.preview_path.unlink(missing_ok=True)
+            return
+        box.set_files([result.source_path])
+        self.riskalyze_preview_path = result.preview_path
+        if self.riskalyze_preview_button is not None:
+            self.riskalyze_preview_button.setVisible(True)
+        self.status.setText("Riskalyze exact match captured and privacy-safe analytics are ready.")
+        self.status.setStyleSheet(f"color: {SUCCESS};")
+
+    def _riskalyze_failed(self, message: str) -> None:
+        self._show_error(message)
+
+    def _riskalyze_finished(self) -> None:
+        if self.riskalyze_button is not None:
+            try:
+                self.riskalyze_button.setEnabled(True)
+                self.riskalyze_button.setText("Fetch from Riskalyze")
+            except RuntimeError:
+                pass
+        self.review_button.setEnabled(True)
+        if self.riskalyze_worker is not None:
+            self.riskalyze_worker.deleteLater()
+        self.riskalyze_worker = None
+
+    def _open_riskalyze_preview(self) -> None:
+        if self.riskalyze_preview_path is None or not self.riskalyze_preview_path.is_file():
+            self._show_error("The temporary Riskalyze capture is no longer available.")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.riskalyze_preview_path)))
+
+    def _clear_capture_files(self) -> None:
+        if self.capture_in_progress:
+            return
+        root = Path(self.capture_directory.name)
+        for pattern in ("riskalyze_metrics_*.csv", "riskalyze_metrics_*.png"):
+            for path in root.glob(pattern):
+                path.unlink(missing_ok=True)
+        self.riskalyze_preview_path = None
+
+    def clear_capture_files(self) -> None:
+        self._clear_capture_files()
+
+    def cleanup(self) -> None:
+        if self.capture_in_progress:
+            return
+        self.capture_directory.cleanup()
 
     def _clear_content(self) -> None:
         self.upload_boxes.clear()
@@ -255,17 +402,28 @@ class IntakePage(QWidget):
             self._show_error("Missing: " + ", ".join(missing))
             return
 
-        paths = [path for box in self.upload_boxes.values() for path in box.paths]
-        result = self.scanner.scan_files(paths)
-        if not result.approved:
-            self._show_privacy_failure(result)
-            return
-
         selections = {
             slot_id: tuple(box.paths)
             for slot_id, box in self.upload_boxes.items()
             if box.paths
         }
+        prepared = None
+        try:
+            privacy_selections = selections
+            if self.workflow.skill_id == "client-deck-builder":
+                prepared = prepare_client_deck_portal_captures(selections)
+                privacy_selections = prepared.selections
+            paths = [path for items in privacy_selections.values() for path in items]
+            result = self.scanner.scan_files(paths)
+        except PortalCaptureError as exc:
+            self._show_error(str(exc))
+            return
+        finally:
+            if prepared is not None:
+                prepared.cleanup()
+        if not result.approved:
+            self._show_privacy_failure(result)
+            return
         validation = self.validator.validate(self.workflow, selections)
         if not validation.approved:
             self._show_error(" | ".join(issue.message for issue in validation.errors))
@@ -326,7 +484,7 @@ class ReviewPage(QWidget):
         layout.addStretch()
 
         action_row = QHBoxLayout()
-        self.note = QLabel("Reportus will build, verify, and save only the final report.")
+        self.note = QLabel("Reporticles will build, verify, and save only the final report.")
         self.note.setObjectName("Muted")
         generate = QPushButton("Generate report")
         generate.setObjectName("PrimaryButton")

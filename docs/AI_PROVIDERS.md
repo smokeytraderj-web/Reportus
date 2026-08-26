@@ -1,6 +1,6 @@
 # AI provider configuration
 
-Reportus keeps report logic independent from any model vendor. AI synthesis is disabled by default; deterministic JSON workflows continue to work without a model.
+Reporticles keeps report logic independent from any model vendor. AI synthesis is disabled by default; deterministic JSON workflows continue to work without a model.
 
 ## Free local development with Ollama
 
@@ -9,13 +9,13 @@ Reportus keeps report logic independent from any model vendor. AI synthesis is d
 3. Set these Windows environment variables, replacing `<installed-model>` with the model name you pulled:
 
 ```powershell
-setx REPORTUS_AI_PROVIDER ollama
-setx REPORTUS_OLLAMA_MODEL "<installed-model>"
-setx REPORTUS_OLLAMA_ENDPOINT "http://127.0.0.1:11434"
+setx REPORTICLES_AI_PROVIDER ollama
+setx REPORTICLES_OLLAMA_MODEL "<installed-model>"
+setx REPORTICLES_OLLAMA_ENDPOINT "http://127.0.0.1:11434"
 ```
 
-Restart Reportus after changing the variables. Local Ollama needs no API key and uploaded content stays on the computer. Reportus uses Ollama's JSON-schema `format` support with non-streaming output, as documented in the [Ollama Generate API](https://docs.ollama.com/api/generate).
+Restart Reporticles after changing the variables. Local Ollama needs no API key and uploaded content stays on the computer. Reporticles uses Ollama's JSON-schema `format` support with non-streaming output, as documented in the [Ollama Generate API](https://docs.ollama.com/api/generate).
 
 ## Remote endpoints
 
-A non-loopback Ollama endpoint is treated as external processing and remains blocked unless `REPORTUS_ALLOW_EXTERNAL_AI=true` is explicitly configured. The privacy gate still runs first. Production provider selection and key management will move into the deferred admin settings area.
+A non-loopback Ollama endpoint is treated as external processing and remains blocked unless `REPORTICLES_ALLOW_EXTERNAL_AI=true` is explicitly configured. The privacy gate still runs first. Production provider selection and key management will move into the deferred admin settings area. Legacy `REPORTUS_*` variables remain supported for existing installations.

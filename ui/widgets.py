@@ -1,4 +1,4 @@
-"""Reusable Reportus interface controls."""
+"""Reusable Reporticles interface controls."""
 
 from __future__ import annotations
 
@@ -39,15 +39,15 @@ class UploadBox(QFrame):
         layout.setContentsMargins(18, 15, 18, 15)
         layout.setSpacing(5)
 
-        title_row = QHBoxLayout()
+        self.title_row = QHBoxLayout()
         title = QLabel(label)
         title.setObjectName("SectionTitle")
         self.pick_button = QPushButton("Choose files")
         self.pick_button.setObjectName("SecondaryButton")
         self.pick_button.clicked.connect(self.choose_files)
-        title_row.addWidget(title)
-        title_row.addStretch()
-        title_row.addWidget(self.pick_button)
+        self.title_row.addWidget(title)
+        self.title_row.addStretch()
+        self.title_row.addWidget(self.pick_button)
 
         hint = QLabel(description)
         hint.setObjectName("Muted")
@@ -55,9 +55,18 @@ class UploadBox(QFrame):
         self.file_label = QLabel("Drop files here or choose files")
         self.file_label.setObjectName("Muted")
 
-        layout.addLayout(title_row)
+        layout.addLayout(self.title_row)
         layout.addWidget(hint)
         layout.addWidget(self.file_label)
+
+    def add_action(self, label: str, callback) -> QPushButton:
+        """Add a workflow-specific action beside the standard file picker."""
+
+        button = QPushButton(label)
+        button.setObjectName("SecondaryButton")
+        button.clicked.connect(callback)
+        self.title_row.insertWidget(self.title_row.count() - 1, button)
+        return button
 
     def choose_files(self) -> None:
         selected, _ = QFileDialog.getOpenFileNames(self, "Select report files", "", FILE_FILTER)

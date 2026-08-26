@@ -1,4 +1,4 @@
-# Reportus Build Plan
+# Reporticles Build Plan
 
 ## Phase 1 - Foundation
 
@@ -22,7 +22,7 @@ Exit condition: prohibited or malformed test fixtures cannot reach report execut
 
 ## Phase 3 - Desktop Shell
 
-- Build the PySide6 Reportus window and restrained firm styling.
+- Build the PySide6 Reporticles window and restrained firm styling.
 - Add four report cards: Client Deck, Excel to PDF, Excel Workbook, and PowerPoint Deck.
 - Add drag-and-drop, file selection, optional sections, and Other / Custom Section.
 - Add validation feedback, the pre-generation review, and a minimal progress screen.
@@ -31,7 +31,7 @@ Exit condition: a user can complete the entire intake and approval flow without 
 
 ## Phase 4 - Report Execution
 
-- Adapt Client Deck to the Reportus session and output contracts.
+- Adapt Client Deck to the Reporticles session and output contracts.
 - Adapt Excel to PDF to the same contracts.
 - Adapt Excel Workbook and PowerPoint Deck.
 - Add YCharts as an internal capability with a reliable non-browser fallback.
@@ -52,13 +52,15 @@ Exit condition: finalized outputs open correctly, meet their skill-defined QA ru
 
 Current status: embedded preview, ephemeral Data & Sources evidence, finalization, versioning, cleanup, and guarded one-slide PowerPoint text revisions are connected. Excel-report chat revisions remain source-driven by design until a safe structured editing contract is added.
 
+Riskalyze exact-household lookup, persistent local sign-in, privacy-safe Current Portfolio capture, and branded Risk Snapshot reconstruction are connected. JPMorgan and Client 360 portal adapters are the next sources in the client-review sequence.
+
 ## Phase 6 - Windows Packaging
 
-- Package Reportus for a standard Windows business laptop.
+- Package Reporticles for a standard Windows business laptop.
 - Build an installer, desktop shortcut, uninstaller, and configurable output-folder setting.
 - Test clean install, upgrade, generation, cancellation, crash cleanup, and uninstall.
 
-Exit condition: Reportus installs and runs without a development environment.
+Exit condition: Reporticles installs and runs without a development environment.
 
 Current status: the versioned PyInstaller onedir build, packaged-resource smoke test, per-user Inno Setup installer, shortcuts, and uninstaller are scaffolded. A clean Windows-machine build and install test is still required.
 

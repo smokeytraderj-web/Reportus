@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class PackagingTests(unittest.TestCase):
     def test_installer_version_matches_runtime_version(self) -> None:
-        installer = (ROOT / "packaging/windows/Reportus.iss").read_text(
+        installer = (ROOT / "packaging/windows/Reporticles.iss").read_text(
             encoding="utf-8"
         )
         match = re.search(r'#define MyAppVersion "([^"]+)"', installer)
@@ -21,7 +21,7 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(match.group(1), __version__)
 
     def test_spec_bundles_every_runtime_resource_root(self) -> None:
-        spec = (ROOT / "packaging/windows/Reportus.spec").read_text(encoding="utf-8")
+        spec = (ROOT / "packaging/windows/Reporticles.spec").read_text(encoding="utf-8")
 
         for resource in ("skills", "report_workflows.json", "skills.json", "services", "templates"):
             with self.subTest(resource=resource):
@@ -41,7 +41,15 @@ class PackagingTests(unittest.TestCase):
 
         self.assertIn("windows-latest", workflow)
         self.assertIn("build_windows.ps1", workflow)
-        self.assertIn("Reportus-Windows-Installer", workflow)
+        self.assertIn("Reporticles-Windows-Installer", workflow)
+
+    def test_packaged_build_includes_riskalyze_browser(self) -> None:
+        script = (ROOT / "scripts/build_windows.ps1").read_text(encoding="utf-8")
+        spec = (ROOT / "packaging/windows/Reporticles.spec").read_text(encoding="utf-8")
+
+        self.assertIn('"playwright", "install", "chromium"', script)
+        self.assertIn('collect_all("playwright")', spec)
+        self.assertIn('name="Reporticles"', spec)
 
 
 if __name__ == "__main__":

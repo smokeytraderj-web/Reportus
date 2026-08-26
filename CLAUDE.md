@@ -1,8 +1,8 @@
-# Reportus Project Instructions
+# Reporticles Project Instructions
 
 ## Product
 
-Reportus is a single-user Windows desktop application for creating polished internal and client-facing financial reports. It transforms approved uploaded data and explicitly requested external research into report-specific deliverables.
+Reporticles is a single-user Windows desktop application for creating polished internal and client-facing financial reports. It transforms approved uploaded data and explicitly requested external research into report-specific deliverables.
 
 The product must feel minimal, sleek, professional, and fast. Assume users understand financial material and do not need educational explanations.
 
@@ -148,4 +148,3 @@ Do not preserve revision-chat history or intermediate report versions.
 - Record source provenance alongside normalized values throughout an active session.
 - Add tests for privacy rejection, malformed inputs, reconciliation, filename versioning, cleanup after success/cancel/crash, skill validation, and output QA.
 - Do not claim a workflow is complete until a representative end-to-end test produces and verifies the expected deliverable.
-

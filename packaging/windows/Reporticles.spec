@@ -1,10 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller onedir build for fast startup inside the Reportus installer."""
+"""PyInstaller onedir build for fast startup inside the Reporticles installer."""
 
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_all
 
 
 PROJECT_ROOT = Path(SPECPATH).parents[1]
+playwright_datas, playwright_binaries, playwright_hiddenimports = collect_all("playwright")
 
 datas = [
     (str(PROJECT_ROOT / "config" / "skills.json"), "config"),
@@ -17,9 +19,9 @@ datas = [
 a = Analysis(
     [str(PROJECT_ROOT / "app.py")],
     pathex=[str(PROJECT_ROOT)],
-    binaries=[],
-    datas=datas,
-    hiddenimports=["PySide6.QtPdf", "PySide6.QtPdfWidgets"],
+    binaries=playwright_binaries,
+    datas=datas + playwright_datas,
+    hiddenimports=["PySide6.QtPdf", "PySide6.QtPdfWidgets", *playwright_hiddenimports],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -34,7 +36,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Reportus",
+    name="Reporticles",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -54,5 +56,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="Reportus",
+    name="Reporticles",
 )

@@ -159,11 +159,13 @@ def _add_riskalyze_snapshot(slide, data: ClientDeckData) -> None:
         style.add_text(slide, Inches(11.30), Inches(3.60), Inches(1), Inches(.18),
                        "95%", 8, style.BODY_GRAY, font=style.BODY_FONT, align=PP_ALIGN.RIGHT)
 
+    expense_ratio = _risk_metric(metrics, "Expense ratio")
+    portfolio_costs = _risk_metric(metrics, "Portfolio costs")
     detail_metrics = [
         ("Annual dividend", _risk_metric(metrics, "Annual dividend")),
         ("Max drawdown", _risk_metric(metrics, "Max drawdown")),
         ("Annual range midpoint", _risk_metric(metrics, "Annual range midpoint")),
-        ("Expense ratio", _risk_metric(metrics, "Expense ratio", "Portfolio costs")),
+        ("Expense ratio" if expense_ratio else "Portfolio costs", expense_ratio or portfolio_costs),
     ]
     visible_metrics = [(label, value) for label, value in detail_metrics if value]
     if visible_metrics:

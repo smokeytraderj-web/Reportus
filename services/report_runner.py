@@ -287,7 +287,7 @@ class ReportRunner:
                         "Copy values exactly; do not calculate missing fields or infer investment conclusions. "
                         "For risk_metrics, include Portfolio total, Risk, Historical loss, Historical loss %, "
                         "Historical gain, Historical gain %, Annual dividend, Max drawdown, Annual range midpoint, "
-                        "and Expense ratio when those values are shown. "
+                        "Expense ratio, and Portfolio costs when those values are shown. "
                         "Returns and contributions must be decimal numbers (0.052 means 5.20%); sector exposures "
                         "must be percentage points (5.20 means 5.20%). Include optional_sections only when the "
                         f"corresponding real source is present. Uploaded sections: {included_slots}. "

@@ -1,4 +1,4 @@
-"""Typed models shared across Reportus subsystems."""
+"""Typed models shared across Reporticles subsystems."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 class SkillKind(StrEnum):
-    """How a skill is exposed by Reportus."""
+    """How a skill is exposed by Reporticles."""
 
     REPORT = "report"
     CAPABILITY = "capability"

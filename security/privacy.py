@@ -1,4 +1,4 @@
-"""Fail-closed local privacy inspection for Reportus uploads."""
+"""Fail-closed local privacy inspection for Reporticles uploads."""
 
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ class PrivacyScanner:
     """Inspect supported uploads locally and reject a batch on any uncertainty."""
 
     def scan_text(self, text: str, *, source: str = "typed request") -> PrivacyScanResult:
-        """Apply the same fail-closed policy to text entered inside Reportus."""
+        """Apply the same fail-closed policy to text entered inside Reporticles."""
 
         if not text.strip():
             return PrivacyScanResult(False, errors=("No text was provided.",))
@@ -207,7 +207,7 @@ class PrivacyScanner:
         executable = shutil.which("tesseract")
         if executable is None:
             raise PrivacyScanError("image OCR is unavailable, so the screenshot cannot be approved")
-        with tempfile.TemporaryDirectory(prefix="reportus-ocr-") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="reporticles-ocr-") as temp_dir:
             output_base = Path(temp_dir) / "ocr"
             completed = subprocess.run(
                 [executable, str(path), str(output_base)],

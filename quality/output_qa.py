@@ -1,4 +1,4 @@
-"""Deterministic integrity checks before Reportus enables finalization."""
+"""Deterministic integrity checks before Reporticles enables finalization."""
 
 from __future__ import annotations
 

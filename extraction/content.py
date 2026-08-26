@@ -133,7 +133,7 @@ class ContentExtractor:
         executable = shutil.which("tesseract")
         if executable is None:
             raise ExtractionError("Image OCR is unavailable.")
-        with tempfile.TemporaryDirectory(prefix="reportus-extract-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reporticles-extract-") as temporary:
             output = Path(temporary) / "ocr"
             completed = subprocess.run(
                 [executable, str(path), str(output)], capture_output=True, text=True,
@@ -150,7 +150,7 @@ class ContentExtractor:
         executable = shutil.which("tesseract")
         if executable is None:
             raise ExtractionError("Image OCR is unavailable.")
-        with tempfile.TemporaryDirectory(prefix="reportus-riskalyze-ocr-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="reporticles-riskalyze-ocr-") as temporary:
             root = Path(temporary)
             with Image.open(path) as raw:
                 image = ImageOps.autocontrast(ImageOps.grayscale(raw)).filter(ImageFilter.SHARPEN)

@@ -17,13 +17,23 @@ class DisabledProvider:
 
 
 def provider_from_environment() -> StructuredProvider:
-    provider_id = os.environ.get("REPORTUS_AI_PROVIDER", "disabled").strip().casefold()
+    provider_id = os.environ.get(
+        "REPORTICLES_AI_PROVIDER", os.environ.get("REPORTUS_AI_PROVIDER", "disabled")
+    ).strip().casefold()
     if provider_id == "ollama":
         provider = OllamaProvider(
-            model=os.environ.get("REPORTUS_OLLAMA_MODEL", "").strip(),
-            endpoint=os.environ.get("REPORTUS_OLLAMA_ENDPOINT", "http://127.0.0.1:11434").strip(),
+            model=os.environ.get(
+                "REPORTICLES_OLLAMA_MODEL", os.environ.get("REPORTUS_OLLAMA_MODEL", "")
+            ).strip(),
+            endpoint=os.environ.get(
+                "REPORTICLES_OLLAMA_ENDPOINT",
+                os.environ.get("REPORTUS_OLLAMA_ENDPOINT", "http://127.0.0.1:11434"),
+            ).strip(),
         )
-        allow_external = os.environ.get("REPORTUS_ALLOW_EXTERNAL_AI", "").strip().casefold() == "true"
+        allow_external = os.environ.get(
+            "REPORTICLES_ALLOW_EXTERNAL_AI",
+            os.environ.get("REPORTUS_ALLOW_EXTERNAL_AI", ""),
+        ).strip().casefold() == "true"
         if provider.external and not allow_external:
             raise ProviderError(
                 "Remote AI processing is disabled. Use local Ollama or explicitly enable external processing."

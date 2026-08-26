@@ -1,4 +1,4 @@
-"""Discover and validate Reportus skills without loading every skill body."""
+"""Discover and validate Reporticles skills without loading every skill body."""
 
 from __future__ import annotations
 

@@ -10,6 +10,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+_SAFE_RISKALYZE_PREFIX = "riskalyze_analytics_"
 
 
 class PortalCaptureError(RuntimeError):
@@ -26,6 +27,29 @@ class PreparedPortalSelections:
             self.temporary_directory.cleanup()
 
 
+def crop_riskalyze_analytics(source: Path, destination: Path) -> Path:
+    """Write only the right-side analytics panel from a full portfolio capture."""
+
+    try:
+        with Image.open(source) as raw:
+            image = ImageOps.exif_transpose(raw).convert("RGB")
+    except (OSError, UnidentifiedImageError) as exc:
+        raise PortalCaptureError(
+            "The Riskalyze screenshot could not be opened. Capture it again as PNG or JPG."
+        ) from exc
+    if image.width < 900 or image.height < 500 or image.width / image.height < 1.45:
+        raise PortalCaptureError(
+            "Use a full-width Riskalyze Current Portfolio screenshot (at least 900×500)."
+        )
+    safe_panel = image.crop((round(image.width * .66), 0, image.width, image.height))
+    safe_panel = safe_panel.resize(
+        (safe_panel.width * 2, safe_panel.height * 2), Image.Resampling.LANCZOS
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    safe_panel.save(destination, format="PNG", optimize=True)
+    return destination
+
+
 def prepare_client_deck_portal_captures(
     selections: dict[str, tuple[Path, ...]],
 ) -> PreparedPortalSelections:
@@ -38,32 +62,21 @@ def prepare_client_deck_portal_captures(
     """
 
     risk_paths = selections.get("risk_snapshot", ())
-    images = [path for path in risk_paths if path.suffix.lower() in _IMAGE_EXTENSIONS]
+    images = [
+        path for path in risk_paths
+        if path.suffix.lower() in _IMAGE_EXTENSIONS
+        and not path.stem.startswith(_SAFE_RISKALYZE_PREFIX)
+    ]
     if not images:
         return PreparedPortalSelections(dict(selections))
 
-    temporary = tempfile.TemporaryDirectory(prefix="reportus-riskalyze-safe-")
+    temporary = tempfile.TemporaryDirectory(prefix="reporticles-riskalyze-safe-")
     root = Path(temporary.name)
     replacements: dict[Path, Path] = {}
     try:
         for index, source in enumerate(images, start=1):
-            try:
-                with Image.open(source) as raw:
-                    image = ImageOps.exif_transpose(raw).convert("RGB")
-            except (OSError, UnidentifiedImageError) as exc:
-                raise PortalCaptureError(
-                    "The Riskalyze screenshot could not be opened. Capture it again as PNG or JPG."
-                ) from exc
-            if image.width < 900 or image.height < 500 or image.width / image.height < 1.45:
-                raise PortalCaptureError(
-                    "Use a full-width Riskalyze Current Portfolio screenshot (at least 900×500)."
-                )
-            safe_panel = image.crop((round(image.width * .66), 0, image.width, image.height))
-            safe_panel = safe_panel.resize(
-                (safe_panel.width * 2, safe_panel.height * 2), Image.Resampling.LANCZOS
-            )
             destination = root / f"riskalyze_analytics_{index}.png"
-            safe_panel.save(destination, format="PNG", optimize=True)
+            crop_riskalyze_analytics(source, destination)
             replacements[source] = destination
     except Exception:
         temporary.cleanup()

@@ -12,9 +12,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - name: Check out Reportus
+      - name: Check out Reporticles
         uses: actions/checkout@v5
 
       - name: Set up Python
@@ -37,9 +37,9 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v6
         with:
-          name: Reportus-Windows-Installer
+          name: Reporticles-Windows-Installer
           path: |
-            dist/installer/Reportus-Setup-*.exe
-            dist/installer/Reportus-Setup-*.exe.sha256
+            dist/installer/Reporticles-Setup-*.exe
+            dist/installer/Reporticles-Setup-*.exe.sha256
           if-no-files-found: error
           retention-days: 14

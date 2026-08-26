@@ -11,7 +11,7 @@
         {"id": "report_date", "label": "Report date", "placeholder": "YYYY-MM-DD"}
       ],
       "required_uploads": [
-        {"id": "risk_snapshot", "label": "Riskalyze current portfolio", "description": "Upload the full-width screenshot; Reportus locally removes the client and account rows before analysis.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv", ".png", ".jpg", ".jpeg"]},
+        {"id": "risk_snapshot", "label": "Riskalyze current portfolio", "description": "Fetch it automatically or upload a full-width screenshot; Reporticles locally removes the client and account rows before analysis.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv", ".png", ".jpg", ".jpeg"]},
         {"id": "attribution", "label": "Attribution report", "description": "Performance contribution and holding-level results.", "accepted_extensions": [".pdf", ".xlsx", ".xlsm", ".csv"]},
         {"id": "market_report", "label": "Market report", "description": "Sector performance, commentary, and earnings outlook.", "accepted_extensions": [".pdf", ".pptx", ".docx", ".xlsx", ".xlsm", ".csv", ".png", ".jpg", ".jpeg"]}
       ],

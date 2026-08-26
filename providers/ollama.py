@@ -29,7 +29,7 @@ class OllamaProvider:
         payload = {
             "model": self.model,
             "system": (
-                "You are the structured-data synthesis component inside Reportus. "
+                "You are the structured-data synthesis component inside Reporticles. "
                 "Global privacy, accuracy, and source-faithfulness rules are mandatory."
             ),
             "prompt": request.prompt(),

@@ -1,4 +1,4 @@
-"""Main Reportus window and page navigation."""
+"""Main Reporticles window and page navigation."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ class RevisionWorker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Reportus")
+        self.setWindowTitle("Reporticles")
         self.resize(1180, 780)
         self.setMinimumSize(940, 660)
         self.workflows = {item.skill_id: item for item in load_workflows()}
@@ -80,7 +80,14 @@ class MainWindow(QMainWindow):
         self.worker: GenerationWorker | None = None
         self.revision_worker: RevisionWorker | None = None
         self.progress: QProgressDialog | None = None
-        self.preferences = QSettings("Reportus", "Reportus")
+        self.preferences = QSettings("Reporticles", "Reporticles")
+        legacy_preferences = QSettings("Reportus", "Reportus")
+        if not self.preferences.contains("output_directory") and legacy_preferences.contains(
+            "output_directory"
+        ):
+            self.preferences.setValue(
+                "output_directory", legacy_preferences.value("output_directory", "", type=str)
+            )
 
         root = QWidget()
         root.setObjectName("AppRoot")
@@ -95,7 +102,7 @@ class MainWindow(QMainWindow):
         topbar_layout.setContentsMargins(34, 12, 34, 12)
         brand = QVBoxLayout()
         brand.setSpacing(1)
-        wordmark = QLabel("Reportus")
+        wordmark = QLabel("Reporticles")
         wordmark.setObjectName("Wordmark")
         firm = QLabel("Gottfried & Somberg Wealth Management")
         firm.setObjectName("FirmName")
@@ -156,7 +163,7 @@ class MainWindow(QMainWindow):
             return Path(saved)
         selected = QFileDialog.getExistingDirectory(
             self,
-            "Choose the Reportus output folder",
+            "Choose the Reporticles output folder",
             str(Path.home() / "Documents"),
         )
         if not selected:
@@ -168,7 +175,7 @@ class MainWindow(QMainWindow):
         if self.current_request is None or self.worker is not None:
             return
         self.progress = QProgressDialog("Building and checking your report…", "", 0, 0, self)
-        self.progress.setWindowTitle("Reportus")
+        self.progress.setWindowTitle("Reporticles")
         self.progress.setCancelButton(None)
         self.progress.setMinimumDuration(0)
         self.progress.setAutoClose(False)
@@ -216,6 +223,7 @@ class MainWindow(QMainWindow):
             return
         self.prepared_report = None
         self.current_request = None
+        self.intake.clear_capture_files()
         QMessageBox.information(self, "Report finalized", f"Saved to:\n{result.output_path}")
         self.stack.setCurrentWidget(self.home)
 
@@ -226,6 +234,7 @@ class MainWindow(QMainWindow):
             self.runner.cancel(self.prepared_report)
         self.prepared_report = None
         self.current_request = None
+        self.intake.clear_capture_files()
         self.stack.setCurrentWidget(self.home)
 
     def request_revision(self, prompt: str) -> None:
@@ -260,6 +269,7 @@ class MainWindow(QMainWindow):
         if (
             (self.worker is not None and self.worker.isRunning())
             or (self.revision_worker is not None and self.revision_worker.isRunning())
+            or self.intake.capture_in_progress
         ):
             QMessageBox.information(
                 self,
@@ -270,4 +280,5 @@ class MainWindow(QMainWindow):
             return
         if self.prepared_report is not None and not self.prepared_report.session.closed:
             self.runner.cancel(self.prepared_report)
+        self.intake.cleanup()
         super().closeEvent(event)

@@ -3,7 +3,7 @@
 from core.skill_registry import SkillRegistry
 
 
-class ReportusAgent:
+class ReporticlesAgent:
     """Thin coordinator that activates exactly one report skill per session."""
 
     def __init__(self, registry: SkillRegistry | None = None):
@@ -13,3 +13,7 @@ class ReportusAgent:
         """Return stable menu identifiers and labels."""
 
         return tuple((skill.skill_id, skill.label) for skill in self.registry.menu_skills())
+
+
+# Backward-compatible import for integrations created before the product rename.
+ReportusAgent = ReporticlesAgent

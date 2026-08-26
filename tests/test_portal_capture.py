@@ -37,6 +37,16 @@ class PortalCaptureTests(unittest.TestCase):
             with self.assertRaises(PortalCaptureError):
                 prepare_client_deck_portal_captures({"risk_snapshot": (source,)})
 
+    def test_already_safe_analytics_capture_is_not_cropped_again(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "riskalyze_analytics_verified.png"
+            Image.new("RGB", (600, 1000), "white").save(source)
+
+            prepared = prepare_client_deck_portal_captures({"risk_snapshot": (source,)})
+
+            self.assertEqual(prepared.selections["risk_snapshot"], (source,))
+            self.assertIsNone(prepared.temporary_directory)
+
 
 if __name__ == "__main__":
     unittest.main()

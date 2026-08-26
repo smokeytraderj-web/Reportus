@@ -22,7 +22,7 @@ def convert_pptx_to_pdf(source: Path, destination: Path) -> Path:
         raise ConversionError("The presentation intermediate is missing.")
     office = shutil.which("libreoffice") or shutil.which("soffice")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="reportus-convert-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="reporticles-convert-") as temporary:
         temp_dir = Path(temporary)
         produced = temp_dir / "converted.pdf"
         if office is not None:

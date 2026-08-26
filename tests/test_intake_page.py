@@ -37,6 +37,14 @@ class IntakePageTests(unittest.TestCase):
                     len(workflow.required_uploads) + len(workflow.optional_uploads) + 1
                 )
                 self.assertEqual(len(page.content.findChildren(UploadBox)), expected_uploads)
+                if workflow.skill_id == "client-deck-builder":
+                    self.assertIsNotNone(page.riskalyze_button)
+                    self.assertEqual(page.riskalyze_button.text(), "Fetch from Riskalyze")
+                    self.assertIsNotNone(page.riskalyze_preview_button)
+                    self.assertFalse(page.riskalyze_preview_button.isVisible())
+                else:
+                    self.assertIsNone(page.riskalyze_button)
+                    self.assertIsNone(page.riskalyze_preview_button)
 
         page.deleteLater()
         self.application.processEvents()

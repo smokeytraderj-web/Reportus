@@ -1,7 +1,7 @@
 """Generate a branded stock-review PDF from a validated Excel workbook.
 
 The layout comes from the installed ``template-pdf-report`` skill.  This module
-owns Reportus-specific safety rules: no inferred investment calls, no hardcoded
+owns Reporticles-specific safety rules: no inferred investment calls, no hardcoded
 client paths, escaped workbook text, portable browser discovery, and verified
 temporary rendering before the final file is copied into place.
 """
@@ -405,7 +405,7 @@ def render_html_to_pdf(document: str, destination: Path, *, browser_path: Path |
     if keep_html is not None:
         keep_html.parent.mkdir(parents=True, exist_ok=True)
         keep_html.write_text(document, encoding="utf-8")
-    with tempfile.TemporaryDirectory(prefix="reportus-pdf-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="reporticles-pdf-") as temporary:
         temp_dir = Path(temporary)
         html_path = temp_dir / "report.html"
         pdf_path = temp_dir / "report.pdf"
