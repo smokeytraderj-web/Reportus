@@ -24,6 +24,12 @@ class ThemeTests(unittest.TestCase):
             with self.subTest(selector=selector):
                 self.assertIn(selector, APP_STYLESHEET)
 
+    def test_header_uses_gswm_navy_instead_of_near_black(self) -> None:
+        header = APP_STYLESHEET.split("QFrame#TopBar", 1)[1].split("}", 1)[0]
+
+        self.assertIn(f"background: {NAVY};", header)
+        self.assertNotIn(f"background: {NAVY_DARK};", header)
+
 
 if __name__ == "__main__":
     unittest.main()

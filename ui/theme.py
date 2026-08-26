@@ -25,7 +25,7 @@ QWidget {{
 }}
 QMainWindow, QWidget#AppRoot, QStackedWidget {{ background: {CANVAS}; }}
 QFrame#TopBar {{
-    background: {NAVY_DARK};
+    background: {NAVY};
     border: 0;
     border-bottom: 2px solid {GOLD};
 }}
