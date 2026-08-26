@@ -1,17 +1,41 @@
 ---
 name: excel-workbook-builder
 description: >
-  Build a client-ready Excel workbook in the GSWM clean/minimal "Stock List" style (serif
-  firm name, thin navy rule, tracked-caps column labels, ticker+company inline in one
-  column, subtle zebra rows, no heavy gridlines) from a plain data source, plus optionally
-  a matching standalone PDF snapshot of the same table. Use this skill whenever someone
-  asks for a stock/holdings tracker, a current-vs-target price sheet, a holdings summary,
-  or any small recurring data table as a formatted .xlsx (not a PowerPoint or a full
-  multi-page PDF report — those are ../powerpoint-deck-builder/ and
-  ../template-pdf-report/ or ../client-deck-builder/).
+  Build a client-ready custom financial workbook from a plain-language request and optional
+  supporting files. Supports validated YCharts Excel Add-In functions, native Excel formulas,
+  tables, and charts in the GSWM navy-and-gold format. Use whenever someone asks Reporticles
+  to create a custom .xlsx analysis, comparison, dashboard, tracker, or live YCharts workbook.
 ---
 
-# GSWM Excel workbook — clean/minimal "Stock List" style
+# GSWM custom Excel workbook builder
+
+## Current Reporticles workflow
+
+Report type 3 accepts a multiline request such as: "Use YCharts to compare the YTD total
+return, P/E ratio, dividend yield, and drawdown for MSFT, AAPL, and SPY, with a summary
+table and comparison chart." Supporting workbooks, CSVs, PDFs, documents, and images are
+optional.
+
+The model produces a strict workbook plan, never Python, VBA, shell commands, or arbitrary
+spreadsheet XML. Reporticles validates that plan, rejects unsupported or external-data Excel
+functions, checks every YCharts metric code against the locally uploaded Complete Excel
+Reference workbook, and deterministically renders the final workbook and a local PDF review
+preview. The reference workbook stays inside the disposable report session and is deleted
+after finalization or cancellation; it is never bundled into Reporticles or sent to GitHub.
+
+Supported live YCharts formula families:
+
+- `YCP` point metrics and `YCI` qualitative information.
+- `YCS` historical values and `YCD`/`YCDS` associated dates.
+- `YCH` top holdings and `YCU` user objects.
+
+The finished workbook includes a cover sheet with the original request and refresh guidance.
+Live values populate only after the file is opened in desktop Excel with the YCharts add-in
+enabled and the user signed in. Tables use a dark navy header, gold rule, restrained zebra
+rows, explicit financial number formats, frozen headers, print settings, and native Excel
+charts placed in reserved regions.
+
+## Legacy deterministic holdings workflow
 
 Three scripts, all openpyxl/reportlab-driven — nothing here needs Windows or COM
 automation, so all can run in a cloud sandbox as well as locally.

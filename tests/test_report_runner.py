@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from pypdf import PdfWriter
 from pptx import Presentation
 from reportlab.pdfgen import canvas
@@ -32,6 +32,23 @@ def _make_template(path: Path) -> None:
     document = canvas.Canvas(str(path), pagesize=(960, 540))
     document.drawString(72, 468, "Approved synthetic widescreen report reference")
     document.save()
+
+
+def _make_ycharts_reference(path: Path) -> None:
+    workbook = Workbook()
+    metrics = workbook.active
+    metrics.title = "Company | Metrics"
+    metrics.append(["YCharts Excel Add-In Company Metrics"])
+    metrics.append([])
+    metrics.append(["Metric Name", "Financial Statement", "Metric Code", "Syntax"])
+    metrics.append(["Year to Date Total Returns (Daily)", "", "ytd_total_return", 'YCP("MSFT","ytd_total_return")'])
+    metrics.append(["PE Ratio", "", "pe_ratio", 'YCP("MSFT","pe_ratio")'])
+    info = workbook.create_sheet("Company | Info")
+    info.append(["YCharts Excel Add-In Company Info"])
+    info.append([])
+    info.append(["Metric Name", "Metric Code", "Type", "Description", "Syntax"])
+    info.append(["Security Name", "security_name", "String", "Security name", 'YCI("MSFT","security_name")'])
+    workbook.save(path)
 
 
 class ReportRunnerTests(unittest.TestCase):
@@ -296,18 +313,48 @@ class ReportRunnerTests(unittest.TestCase):
     def test_prepares_and_finalizes_excel_workbook(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "holdings.csv"
-            source.write_text(
-                "Description,Symbol,Quantity,Price,Value,% of Assets\n"
-                "Sample Holding,SAM,10,20,200,100%\n",
-                encoding="utf-8",
-            )
+            reference = root / "ycharts-reference.xlsx"
+            _make_ycharts_reference(reference)
+            provider = FixtureProvider([{
+                "workbook_subtitle": "Live market comparison",
+                "sheets": [{
+                    "name": "Comparison",
+                    "title": "Security Comparison",
+                    "subtitle": "Live YCharts snapshot",
+                    "source_note": "Typed request and live YCharts formulas",
+                    "columns": [
+                        {"header": "Security", "format": "text", "width": 18},
+                        {"header": "YTD Total Return", "format": "percent", "width": 18},
+                        {"header": "P/E Ratio", "format": "multiple", "width": 16},
+                    ],
+                    "rows": [
+                        {"cells": [
+                            {"kind": "value", "value": "MSFT"},
+                            {"kind": "ycharts", "function": "YCP", "security": "MSFT", "metric_code": "ytd_total_return", "metric_name": "YTD Total Return"},
+                            {"kind": "ycharts", "function": "YCP", "security": "MSFT", "metric_code": "pe_ratio", "metric_name": "P/E Ratio"},
+                        ]},
+                        {"cells": [
+                            {"kind": "value", "value": "AAPL"},
+                            {"kind": "ycharts", "function": "YCP", "security": "AAPL", "metric_code": "ytd_total_return", "metric_name": "YTD Total Return"},
+                            {"kind": "ycharts", "function": "YCP", "security": "AAPL", "metric_code": "pe_ratio", "metric_name": "P/E Ratio"},
+                        ]},
+                    ],
+                    "charts": [{
+                        "type": "column", "title": "YTD Total Return",
+                        "category_column": 0, "series_columns": [1], "max_rows": 5,
+                    }],
+                }],
+            }])
             request = ReportRunRequest(
                 "excel-workbook-builder",
-                {"source_data": (source,)},
-                {"report_title": "Holdings Summary", "source_label": "Synthetic data"},
+                {"ycharts_reference": (reference,)},
+                {
+                    "report_title": "Security Comparison",
+                    "source_label": "Live YCharts",
+                    "workbook_request": "Compare MSFT and AAPL using YTD total return and P/E ratio.",
+                },
             )
-            runner = ReportRunner(session_root=root / "sessions")
+            runner = ReportRunner(session_root=root / "sessions", provider=provider)
 
             prepared = runner.prepare(request)
 
@@ -315,11 +362,37 @@ class ReportRunnerTests(unittest.TestCase):
             self.assertEqual(prepared.preview_path.suffix, ".pdf")
             self.assertTrue(prepared.artifact_path.is_file())
             self.assertTrue(prepared.preview_path.is_file())
-            self.assertEqual(prepared.audit.report_type, "Excel Workbook")
-            self.assertEqual(prepared.audit.sources[0].name, "holdings.csv")
+            self.assertEqual(prepared.audit.report_type, "Custom Excel Workbook")
+            self.assertEqual(prepared.audit.sections, ("Comparison",))
+            self.assertEqual(prepared.audit.sources[0].name, "ycharts-reference.xlsx")
+            workbook = load_workbook(prepared.artifact_path, data_only=False)
+            try:
+                self.assertEqual(workbook["Comparison"]["B6"].value, '=YCP("MSFT","ytd_total_return")')
+                self.assertEqual(len(workbook["Comparison"]._charts), 1)
+            finally:
+                workbook.close()
             result = runner.finalize(prepared, root / "final")
-            self.assertEqual(result.output_path.name, "Holdings Summary.xlsx")
+            self.assertEqual(result.output_path.name, "Security Comparison.xlsx")
             self.assertTrue(result.output_path.is_file())
+
+    def test_ycharts_request_requires_local_reference_workbook(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            provider = FixtureProvider([])
+            request = ReportRunRequest(
+                "excel-workbook-builder",
+                {},
+                {
+                    "report_title": "Security Comparison",
+                    "source_label": "Live YCharts",
+                    "workbook_request": "Use YCharts to compare MSFT and AAPL.",
+                },
+            )
+
+            with self.assertRaisesRegex(Exception, "Upload the YCharts Complete Excel Reference"):
+                ReportRunner(session_root=root / "sessions", provider=provider).prepare(request)
+
+            self.assertEqual(provider.requests, [])
 
     def test_prepare_keeps_preview_until_finalize(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -18,11 +18,11 @@ from core.audit import AuditCitation, ReportAudit
 from core.session import ReportSession
 from core.structured_agent import StructuredAgent
 from extraction.content import ContentExtractor
-from generators.excel_workbook import (
-    HoldingsWorkbookConfig,
-    build_holdings_snapshot,
-    build_holdings_workbook,
-    load_holdings,
+from generators.custom_excel_workbook import (
+    build_custom_workbook,
+    build_custom_workbook_preview,
+    custom_workbook_schema,
+    normalize_custom_workbook_payload,
 )
 from generators.client_deck import ClientDeckData, build_client_deck
 from generators.client_deck_content import (
@@ -51,6 +51,7 @@ from security.privacy import PrivacyScanner
 from security.portal_capture import PortalCaptureError, prepare_client_deck_portal_captures
 from services.powerpoint_com import build_powerpoint_deck
 from services.conversion import convert_pptx_to_pdf
+from services.ycharts_catalog import YChartsCatalog, YChartsCatalogError
 from tools.filenames import sanitize_filename, versioned_output_path
 
 
@@ -101,7 +102,7 @@ class RevisionContext:
 
 PDFBuilder = Callable[[Path, Path, StockReviewConfig], Path]
 PortfolioPDFBuilder = Callable[..., Path]
-WorkbookBuilder = Callable[[tuple, HoldingsWorkbookConfig, Path], Path]
+CustomWorkbookBuilder = Callable[[dict[str, object], str, Path], Path]
 PowerPointBuilder = Callable[..., tuple[Path, Path]]
 ClientDeckBuilder = Callable[[ClientDeckData, Path], Path]
 PresentationConverter = Callable[[Path, Path], Path]
@@ -197,8 +198,8 @@ class ReportRunner:
         session_root: Path | None = None,
         pdf_builder: PDFBuilder | None = None,
         portfolio_pdf_builder: PortfolioPDFBuilder | None = None,
-        workbook_builder: WorkbookBuilder | None = None,
-        workbook_preview_builder: WorkbookBuilder | None = None,
+        custom_workbook_builder: CustomWorkbookBuilder | None = None,
+        custom_workbook_preview_builder: CustomWorkbookBuilder | None = None,
         powerpoint_builder: PowerPointBuilder | None = None,
         provider: StructuredProvider | None = None,
         client_deck_builder: ClientDeckBuilder | None = None,
@@ -207,8 +208,10 @@ class ReportRunner:
         self.session_root = session_root
         self.pdf_builder = pdf_builder or build_stock_review_pdf
         self.portfolio_pdf_builder = portfolio_pdf_builder or build_portfolio_workbook_pdf
-        self.workbook_builder = workbook_builder or build_holdings_workbook
-        self.workbook_preview_builder = workbook_preview_builder or build_holdings_snapshot
+        self.custom_workbook_builder = custom_workbook_builder or build_custom_workbook
+        self.custom_workbook_preview_builder = (
+            custom_workbook_preview_builder or build_custom_workbook_preview
+        )
         self.powerpoint_builder = powerpoint_builder or build_powerpoint_deck
         self.provider = provider or provider_from_environment()
         self.client_deck_builder = client_deck_builder or build_client_deck
@@ -225,23 +228,24 @@ class ReportRunner:
             prepared_selections.selections if prepared_selections is not None else request.selections
         )
         source_paths = [path for paths in effective_selections.values() for path in paths]
-        try:
-            privacy = PrivacyScanner().scan_files(source_paths)
-        except Exception:
-            if prepared_selections is not None:
-                prepared_selections.cleanup()
-            raise
-        if not privacy.approved:
-            if prepared_selections is not None:
-                prepared_selections.cleanup()
-            categories = sorted({finding.category.value for finding in privacy.findings})
-            details = []
-            if categories:
-                details.append("remove " + ", ".join(categories))
-            if privacy.errors:
-                details.append("replace files that could not be inspected")
-            raise ReportRunError("Privacy check failed: " + "; ".join(details) + ".")
-        if request.custom_prompt.strip():
+        if source_paths:
+            try:
+                privacy = PrivacyScanner().scan_files(source_paths)
+            except Exception:
+                if prepared_selections is not None:
+                    prepared_selections.cleanup()
+                raise
+            if not privacy.approved:
+                if prepared_selections is not None:
+                    prepared_selections.cleanup()
+                categories = sorted({finding.category.value for finding in privacy.findings})
+                details = []
+                if categories:
+                    details.append("remove " + ", ".join(categories))
+                if privacy.errors:
+                    details.append("replace files that could not be inspected")
+                raise ReportRunError("Privacy check failed: " + "; ".join(details) + ".")
+        if request.custom_prompt.strip() and request.skill_id != "excel-workbook-builder":
             if prepared_selections is not None:
                 prepared_selections.cleanup()
             raise ReportRunError(
@@ -448,33 +452,118 @@ class ReportRunner:
                 )
 
             if request.skill_id == "excel-workbook-builder":
-                if staged.get("style_reference"):
-                    raise ReportRunError("Custom workbook style references are not connected yet.")
-                source = _single_file(staged, "source_data")
                 report_title = request.options.get("report_title", "").strip()
                 source_label = request.options.get("source_label", "").strip()
-                if not report_title or not source_label:
-                    raise ReportRunError("Workbook title and source label are required.")
-                holdings = load_holdings(source)
-                workbook_config = HoldingsWorkbookConfig(report_title, source_label)
+                workbook_request = (
+                    request.options.get("workbook_request", "").strip()
+                    or request.custom_prompt.strip()
+                )
+                if not report_title or not source_label or not workbook_request:
+                    raise ReportRunError(
+                        "Workbook title, source label, and custom workbook request are required."
+                    )
+                request_privacy = PrivacyScanner().scan_text(
+                    workbook_request, source="custom workbook request"
+                )
+                if not request_privacy.approved:
+                    categories = sorted(
+                        {finding.category.value for finding in request_privacy.findings}
+                    )
+                    detail = ", ".join(categories) if categories else "uninspectable content"
+                    raise ReportRunError(
+                        "Custom workbook request failed the privacy check: remove " + detail + "."
+                    )
+                wants_ycharts = bool(re.search(
+                    r"\by\s*charts?\b|\bycharts\b|\byc(?:p|i|s|d|ds|h|u)\b",
+                    workbook_request,
+                    re.IGNORECASE,
+                ))
+                reference_paths = staged.get("ycharts_reference", ())
+                if len(reference_paths) > 1:
+                    raise ReportRunError("Upload at most one YCharts Complete Excel Reference workbook.")
+                if wants_ycharts and len(reference_paths) != 1:
+                    raise ReportRunError(
+                        "This request uses YCharts. Upload the YCharts Complete Excel Reference workbook."
+                    )
+                try:
+                    catalog = (
+                        YChartsCatalog.from_reference_workbook(reference_paths[0])
+                        if reference_paths else YChartsCatalog()
+                    )
+                except YChartsCatalogError as exc:
+                    raise ReportRunError(str(exc)) from exc
+                supporting_paths = tuple(
+                    path
+                    for slot in ("source_data", "custom")
+                    for path in staged.get(slot, ())
+                )
+                extracted = (
+                    ContentExtractor().extract(list(supporting_paths))
+                    if supporting_paths else ()
+                )
+                request_fragment = SourceFragment(
+                    "workbook-request", "typed request", workbook_request
+                )
+                user_fragments = extracted + (request_fragment,)
+                catalog_fragment = SourceFragment(
+                    "YCharts Complete Excel Reference",
+                    "approved metric candidates",
+                    catalog.prompt_reference(workbook_request, limit=120),
+                )
+                structured_request = StructuredRequest(
+                    task_name="custom-excel-workbook",
+                    instructions=(
+                        "Design a polished, client-ready financial workbook matching the Gottfried & "
+                        "Somberg navy-and-gold format. The user's request is: "
+                        + json.dumps(workbook_request)
+                        + ". The requested source label is: "
+                        + json.dumps(source_label)
+                        + ". Create one focused table per report sheet, with useful native charts only "
+                        "when they clarify a comparison or trend. Use literal values only when present "
+                        "in the approved user request or uploaded sources. Use ycharts cells for live "
+                        "market data. Every YCharts metric_code must exactly match an approved candidate. "
+                        "Use YCP for point values, YCI for qualitative info, YCS for historical metric "
+                        "series, YCD/YCDS for associated dates, YCH for top holdings, and YCU for the "
+                        "supported user objects. For YCS/YCDS provide either last_periods as a negative "
+                        "integer or ISO start_date/end_date. Historical series formula anchors must be "
+                        "placed in the final planned row so their spill ranges stay clear. Standard Excel "
+                        "formulas may use only simple auditable calculations and cell references. "
+                        "source_note must identify the supporting filename(s), typed request, and/or live "
+                        "YCharts formulas used by that sheet. Keep tables readable at normal zoom."
+                    ),
+                    json_schema=custom_workbook_schema(),
+                    sources=user_fragments + (catalog_fragment,),
+                    privacy_approved=True,
+                )
+                plan = StructuredAgent(self.provider).run(
+                    structured_request,
+                    lambda payload: self._validated_custom_workbook(
+                        payload, report_title, catalog, user_fragments
+                    ),
+                )
                 artifact = session.working / "report.xlsx"
                 preview = session.preview / "report.pdf"
-                self.workbook_builder(holdings, workbook_config, artifact)
-                self.workbook_preview_builder(holdings, workbook_config, preview)
+                self.custom_workbook_builder(plan, workbook_request, artifact)
+                self.custom_workbook_preview_builder(plan, workbook_request, preview)
                 artifact_qa = OutputInspector().inspect(artifact)
                 preview_qa = OutputInspector().inspect(preview)
                 if not artifact_qa.approved or not preview_qa.approved:
                     raise ReportRunError("The generated workbook or preview failed integrity checks.")
                 filename = sanitize_filename(f"{report_title}.xlsx")
                 audit = ReportAudit.from_staged_inputs(
-                    report_type="Excel Workbook",
-                    sections=(workbook_config.sheet_name,),
+                    report_type="Custom Excel Workbook",
+                    sections=tuple(str(item["name"]) for item in plan["sheets"]),
                     staged=staged,
                     slot_labels={
-                        "source_data": "Workbook source data",
-                        "style_reference": "Style reference",
+                        "source_data": "Supporting workbook data",
+                        "style_reference": "Optional visual reference",
+                        "ycharts_reference": "Local YCharts function reference",
                         "custom": "Custom-section support",
                     },
+                    citations=tuple(
+                        AuditCitation(str(item["name"]), str(item["source_note"]))
+                        for item in plan["sheets"]
+                    ),
                 )
                 return PreparedReport(
                     session, artifact, preview, filename, artifact_qa.page_or_sheet_count, audit
@@ -677,6 +766,31 @@ class ReportRunner:
             ),
         )
         return prepared
+
+    @staticmethod
+    def _validated_custom_workbook(payload, report_title, catalog, user_fragments):
+        plan = normalize_custom_workbook_payload(
+            payload, report_title=report_title, catalog=catalog
+        )
+        grounded_values: list[object] = []
+        number_text = re.compile(
+            r"^\s*[+-]?\$?\(?\d[\d,]*(?:\.\d+)?\)?(?:%|x)?\s*$",
+            re.IGNORECASE,
+        )
+        for sheet in plan["sheets"]:
+            for row in sheet["rows"]:
+                for cell in row["cells"]:
+                    if cell["kind"] != "value":
+                        continue
+                    value = cell.get("value")
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        grounded_values.append(value)
+                    elif isinstance(value, str) and number_text.fullmatch(value):
+                        grounded_values.append(value)
+        verify_numeric_grounding(
+            {"literal_values": grounded_values}, tuple(user_fragments)
+        )
+        return plan
 
     @staticmethod
     def _validated_client_deck(payload: dict[str, object], fragments, options) -> ClientDeckData:

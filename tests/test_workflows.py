@@ -11,13 +11,17 @@ class WorkflowTests(unittest.TestCase):
 
         self.assertEqual(
             [workflow.title for workflow in workflows],
-            ["Client Deck", "Excel to PDF", "Excel Workbook", "PowerPoint Deck"],
+            ["Client Deck", "Excel to PDF", "Custom Excel Workbook", "PowerPoint Deck"],
         )
 
-    def test_every_workflow_has_required_uploads(self) -> None:
+    def test_only_custom_excel_can_run_without_an_upload(self) -> None:
         for workflow in load_workflows():
             with self.subTest(workflow=workflow.skill_id):
-                self.assertTrue(workflow.required_uploads)
+                if workflow.skill_id == "excel-workbook-builder":
+                    self.assertFalse(workflow.required_uploads)
+                    self.assertTrue(workflow.optional_uploads)
+                else:
+                    self.assertTrue(workflow.required_uploads)
 
     def test_upload_ids_are_unique_within_workflow(self) -> None:
         for workflow in load_workflows():
@@ -54,6 +58,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("holdings", requirements)
         self.assertIn("attribution", requirements)
         self.assertEqual(requirements["holdings"].accepted_extensions, (".xlsx", ".xlsm"))
+
+    def test_custom_excel_collects_a_multiline_request(self) -> None:
+        workflow = next(
+            item for item in load_workflows() if item.skill_id == "excel-workbook-builder"
+        )
+        request = next(field for field in workflow.fields if field.field_id == "workbook_request")
+
+        self.assertTrue(request.multiline)
+        self.assertIn("YCharts", request.placeholder)
+        optional = {item.requirement_id: item for item in workflow.optional_uploads}
+        self.assertEqual(
+            optional["ycharts_reference"].accepted_extensions, (".xlsx", ".xlsm")
+        )
 
 
 if __name__ == "__main__":

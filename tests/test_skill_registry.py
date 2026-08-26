@@ -11,7 +11,7 @@ class SkillRegistryTests(unittest.TestCase):
 
         self.assertEqual(
             [skill.label for skill in registry.menu_skills()],
-            ["Client Deck", "Excel to PDF", "Excel Workbook", "PowerPoint Deck"],
+            ["Client Deck", "Excel to PDF", "Custom Excel Workbook", "PowerPoint Deck"],
         )
         self.assertEqual(registry.issues, ())
 

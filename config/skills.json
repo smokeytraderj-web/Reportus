@@ -16,7 +16,7 @@
     },
     {
       "id": "excel-workbook-builder",
-      "label": "Excel Workbook",
+      "label": "Custom Excel Workbook",
       "kind": "report",
       "menu_order": 3,
       "enabled": true

@@ -6,13 +6,13 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PySide6.QtWidgets import QApplication, QFrame, QLineEdit
+    from PySide6.QtWidgets import QApplication, QFrame, QLineEdit, QTextEdit
 
     from core.workflows import load_workflows
     from ui.pages import IntakePage
     from ui.widgets import UploadBox
 except ImportError:  # pragma: no cover - CI may run the non-GUI dependency set
-    QApplication = QFrame = QLineEdit = IntakePage = UploadBox = None
+    QApplication = QFrame = QLineEdit = QTextEdit = IntakePage = UploadBox = None
     load_workflows = None
 
 
@@ -32,9 +32,16 @@ class IntakePageTests(unittest.TestCase):
                 self.application.processEvents()
 
                 self.assertEqual(set(page.field_inputs), {field.field_id for field in workflow.fields})
-                self.assertEqual(len(page.content.findChildren(QLineEdit)), len(workflow.fields))
+                line_fields = sum(not field.multiline for field in workflow.fields)
+                multiline_fields = sum(field.multiline for field in workflow.fields)
+                self.assertEqual(len(page.content.findChildren(QLineEdit)), line_fields)
+                expected_text_edits = multiline_fields + (
+                    0 if workflow.skill_id == "excel-workbook-builder" else 1
+                )
+                self.assertEqual(len(page.content.findChildren(QTextEdit)), expected_text_edits)
                 expected_uploads = (
-                    len(workflow.required_uploads) + len(workflow.optional_uploads) + 1
+                    len(workflow.required_uploads) + len(workflow.optional_uploads)
+                    + (0 if workflow.skill_id == "excel-workbook-builder" else 1)
                 )
                 self.assertEqual(len(page.content.findChildren(UploadBox)), expected_uploads)
                 if workflow.skill_id == "client-deck-builder":

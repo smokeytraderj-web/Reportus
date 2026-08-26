@@ -40,16 +40,17 @@
     },
     {
       "skill_id": "excel-workbook-builder",
-      "title": "Excel Workbook",
-      "subtitle": "Create a clean, formatted financial workbook.",
+      "title": "Custom Excel Workbook",
+      "subtitle": "Describe any financial workbook, including live YCharts formulas and charts.",
       "fields": [
-        {"id": "report_title", "label": "Workbook title", "placeholder": "e.g., Holdings Summary", "default": "Holdings Summary"},
-        {"id": "source_label", "label": "Source label", "placeholder": "e.g., Custodial export, August 25, 2026", "default": "Uploaded source data"}
+        {"id": "report_title", "label": "Workbook title", "placeholder": "e.g., Technology Holdings Review", "default": "Custom Financial Analysis"},
+        {"id": "source_label", "label": "Source label", "placeholder": "e.g., YCharts and uploaded holdings", "default": "Live YCharts and approved source data"},
+        {"id": "workbook_request", "label": "What should Reporticles build?", "placeholder": "e.g., Use YCharts to compare the YTD total return, P/E ratio, dividend yield, and drawdown for MSFT, AAPL, and SPY. Add a summary table and a comparison chart.", "multiline": true}
       ],
-      "required_uploads": [
-        {"id": "source_data", "label": "Source data", "description": "Workbook, CSV, or supporting files used to build the output.", "accepted_extensions": [".xlsx", ".xlsm", ".csv", ".tsv"]}
-      ],
+      "required_uploads": [],
       "optional_uploads": [
+        {"id": "ycharts_reference", "label": "YCharts Excel Reference", "description": "For YCharts requests, upload the current Complete Excel Reference workbook. It stays local and is deleted after the build.", "accepted_extensions": [".xlsx", ".xlsm"]},
+        {"id": "source_data", "label": "Supporting data", "description": "Optional workbooks, CSVs, PDFs, documents, or images that ground the custom analysis.", "accepted_extensions": [".xlsx", ".xlsm", ".csv", ".tsv", ".pdf", ".docx", ".pptx", ".png", ".jpg", ".jpeg"]},
         {"id": "style_reference", "label": "Style reference", "description": "Optional example workbook, PDF, or screenshot.", "accepted_extensions": [".xlsx", ".xlsm", ".pdf", ".png", ".jpg", ".jpeg"]}
       ]
     },

@@ -28,6 +28,7 @@ class ReportField:
     placeholder: str
     required: bool = True
     default: str = ""
+    multiline: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +63,7 @@ def _fields(items: list[dict[str, object]]) -> tuple[ReportField, ...]:
             placeholder=str(item.get("placeholder", "")),
             required=bool(item.get("required", True)),
             default=str(item.get("default", "")),
+            multiline=bool(item.get("multiline", False)),
         )
         for item in items
     )

@@ -135,7 +135,7 @@ class IntakePage(QWidget):
         self.workflow: ReportWorkflow | None = None
         self.upload_boxes: dict[str, UploadBox] = {}
         self.optional_checks: dict[str, QCheckBox] = {}
-        self.field_inputs: dict[str, QLineEdit] = {}
+        self.field_inputs: dict[str, QLineEdit | QTextEdit] = {}
         self.riskalyze_worker: RiskalyzeCaptureWorker | None = None
         self.riskalyze_button: QPushButton | None = None
         self.riskalyze_preview_button: QPushButton | None = None
@@ -206,24 +206,43 @@ class IntakePage(QWidget):
             details_grid = QGridLayout()
             details_grid.setHorizontalSpacing(18)
             details_grid.setVerticalSpacing(9)
-            for index, field in enumerate(workflow.fields):
+            grid_row = 0
+            grid_column = 0
+            for field in workflow.fields:
                 label = QLabel(field.label)
                 label.setObjectName("FieldLabel")
-                editor = QLineEdit(field.default)
-                editor.setPlaceholderText(field.placeholder)
+                if field.multiline:
+                    editor = QTextEdit()
+                    editor.setPlainText(field.default)
+                    editor.setPlaceholderText(field.placeholder)
+                    editor.setFixedHeight(112)
+                else:
+                    editor = QLineEdit(field.default)
+                    editor.setPlaceholderText(field.placeholder)
                 self.field_inputs[field.field_id] = editor
-                row, column = divmod(index, 2)
                 cell = QVBoxLayout()
                 cell.setSpacing(4)
                 cell.addWidget(label)
                 cell.addWidget(editor)
-                details_grid.addLayout(cell, row, column)
+                if field.multiline:
+                    if grid_column:
+                        grid_row += 1
+                        grid_column = 0
+                    details_grid.addLayout(cell, grid_row, 0, 1, 2)
+                    grid_row += 1
+                else:
+                    details_grid.addLayout(cell, grid_row, grid_column)
+                    grid_column += 1
+                    if grid_column == 2:
+                        grid_row += 1
+                        grid_column = 0
             self.content_layout.addLayout(details_grid)
             self.content_layout.addSpacing(10)
 
-        required_title = QLabel("Required uploads")
-        required_title.setObjectName("SectionTitle")
-        self.content_layout.addWidget(required_title)
+        if workflow.required_uploads:
+            required_title = QLabel("Required uploads")
+            required_title.setObjectName("SectionTitle")
+            self.content_layout.addWidget(required_title)
         for requirement in workflow.required_uploads:
             box = self._add_upload_box(
                 requirement.requirement_id, requirement.label, requirement.description
@@ -258,7 +277,6 @@ class IntakePage(QWidget):
                 self.content_layout.addWidget(check)
                 self.content_layout.addWidget(box)
 
-        self.content_layout.addSpacing(10)
         custom_check = QCheckBox("Other / Custom Section")
         self.custom_prompt = QTextEdit()
         self.custom_prompt.setPlaceholderText("Describe the section or custom research you want...")
@@ -269,10 +287,12 @@ class IntakePage(QWidget):
         custom_check.toggled.connect(self.custom_prompt.setVisible)
         custom_check.toggled.connect(custom_box.setVisible)
         self.custom_check = custom_check
-        self.upload_boxes["custom"] = custom_box
-        self.content_layout.addWidget(custom_check)
-        self.content_layout.addWidget(self.custom_prompt)
-        self.content_layout.addWidget(custom_box)
+        if workflow.skill_id != "excel-workbook-builder":
+            self.content_layout.addSpacing(10)
+            self.upload_boxes["custom"] = custom_box
+            self.content_layout.addWidget(custom_check)
+            self.content_layout.addWidget(self.custom_prompt)
+            self.content_layout.addWidget(custom_box)
         self.content_layout.addStretch()
 
     def _add_upload_box(self, slot_id: str, label: str, description: str) -> UploadBox:
@@ -406,7 +426,7 @@ class IntakePage(QWidget):
         missing_fields = [
             field.label
             for field in self.workflow.fields
-            if field.required and not self.field_inputs[field.field_id].text().strip()
+            if field.required and not self._field_value(self.field_inputs[field.field_id])
         ]
         missing = [
             item.label
@@ -420,7 +440,7 @@ class IntakePage(QWidget):
             if self.optional_checks[item.requirement_id].isChecked()
             and not self.upload_boxes[item.requirement_id].paths
         ]
-        if self.custom_check.isChecked() and (
+        if self.workflow.skill_id != "excel-workbook-builder" and self.custom_check.isChecked() and (
             not self.custom_prompt.toPlainText().strip() or not self.upload_boxes["custom"].paths
         ):
             selected_optional_missing.append("Other / Custom Section description and files")
@@ -459,12 +479,18 @@ class IntakePage(QWidget):
         self.status.setText("Privacy and data-structure checks passed.")
         self.status.setStyleSheet(f"color: {SUCCESS};")
         options = {
-            field_id: editor.text().strip()
+            field_id: self._field_value(editor)
             for field_id, editor in self.field_inputs.items()
         }
         self.review_ready.emit(
             self.workflow, selections, self.custom_prompt.toPlainText().strip(), options
         )
+
+    @staticmethod
+    def _field_value(editor: QLineEdit | QTextEdit) -> str:
+        if isinstance(editor, QTextEdit):
+            return editor.toPlainText().strip()
+        return editor.text().strip()
 
     def _show_error(self, message: str) -> None:
         self.status.setText(message)
@@ -546,6 +572,7 @@ class ReviewPage(QWidget):
         for field_id, value in options.items():
             row = QLabel(f"{labels.get(field_id, field_id)}:  {value}")
             row.setObjectName("Muted")
+            row.setWordWrap(True)
             self.summary_layout.addWidget(row)
         for slot_id, paths in selections.items():
             label = next(

@@ -6,14 +6,14 @@ A minimal Windows desktop application for building polished financial reports fr
 
 - Four skill-driven intake flows with local privacy and structural validation.
 - Excel-to-PDF stock-review generation using the supplied GSWM template skill.
-- Excel Workbook generation in the current clean/minimal GSWM holdings style, with a matching PDF review snapshot.
+- Custom Excel Workbook generation from a plain-language request, with locally validated YCharts formulas, native charts, GSWM styling, and a matching PDF review preview.
 - PowerPoint Deck generation from a strict JSON content package through the supplied Windows PowerPoint/GSWM-template workflow.
 - Provider-neutral structured synthesis with a disabled-by-default, free local Ollama option and numeric source-grounding checks.
 - Client Deck PPTX/PDF generation engine with synthetic end-to-end coverage.
 - Clear closest-match Riskalyze Current Portfolio capture through a dedicated local browser profile, with ambiguous households blocked and account-level details removed before report synthesis.
 - Isolated report sessions, embedded PDF review, a temporary Data & Sources audit, explicit finalization, automatic filename versioning, and verified cleanup.
 - One-change, text-only PowerPoint revisions with privacy, citation, numeric-grounding, and atomic-replacement guards.
-- General document-to-deck synthesis is connected; custom sections, external research, and revisions for deterministic Excel reports remain in development.
+- General document-to-deck and custom Excel synthesis are connected. External research and chat revisions for deterministic Excel reports remain in development.
 
 ## Development
 
