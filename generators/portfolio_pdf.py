@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
@@ -605,16 +606,27 @@ def build_portfolio_workbook_pdf(
     report_title: str,
     period_label: str,
     source_label: str,
+    converter: Callable[[Path, Path], Path] | None = None,
 ) -> Path:
-    """Build a portfolio report using the workbook's real headers and reference page size."""
+    """Build a portfolio report through the official branded client-deck system."""
 
     data = load_portfolio_workbook(workbook_path)
+    _page_size(reference_pdf)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    renderer = _PortfolioRenderer(output_path, _page_size(reference_pdf), source_label)
-    renderer.cover(data, client_name, report_title, period_label)
-    renderer.overview(data)
-    renderer.allocation(data)
-    renderer.risks(data)
-    renderer.research(data)
-    renderer.sources(data)
-    return renderer.save()
+    intermediate = output_path.with_suffix(".pptx")
+    from generators.portfolio_client_deck import build_portfolio_client_deck
+    from services.conversion import convert_pptx_to_pdf
+
+    build_portfolio_client_deck(
+        data,
+        intermediate,
+        client_name=client_name,
+        report_title=report_title,
+        period_label=period_label,
+        source_label=source_label,
+    )
+    (converter or convert_pptx_to_pdf)(intermediate, output_path)
+    reader = PdfReader(output_path)
+    if not reader.pages:
+        raise PortfolioPDFError("The generated portfolio PDF contains no pages.")
+    return output_path

@@ -3,7 +3,8 @@ import unittest
 from pathlib import Path
 
 from openpyxl import Workbook
-from pypdf import PdfReader
+from pptx import Presentation
+from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 
 from generators.portfolio_pdf import (
@@ -88,6 +89,15 @@ class PortfolioPDFTests(unittest.TestCase):
             _make_portfolio(source)
             _make_reference(reference)
 
+            def fake_converter(presentation_path: Path, destination_path: Path) -> Path:
+                slide_count = len(Presentation(presentation_path).slides)
+                writer = PdfWriter()
+                for _ in range(slide_count):
+                    writer.add_blank_page(width=960, height=540)
+                with destination_path.open("wb") as output_stream:
+                    writer.write(output_stream)
+                return destination_path
+
             build_portfolio_workbook_pdf(
                 source,
                 reference,
@@ -96,12 +106,16 @@ class PortfolioPDFTests(unittest.TestCase):
                 report_title="Portfolio Review",
                 period_label="August 2026",
                 source_label="Uploaded portfolio workbook",
+                converter=fake_converter,
             )
 
             reader = PdfReader(output)
-            self.assertGreaterEqual(len(reader.pages), 5)
+            self.assertEqual(len(reader.pages), 9)
             self.assertAlmostEqual(float(reader.pages[0].mediabox.width), 960)
             self.assertAlmostEqual(float(reader.pages[0].mediabox.height), 540)
+            intermediate = output.with_suffix(".pptx")
+            self.assertTrue(intermediate.is_file())
+            self.assertEqual(len(Presentation(intermediate).slides), 9)
 
 
 if __name__ == "__main__":
